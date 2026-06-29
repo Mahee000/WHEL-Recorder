@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob: file:; img-src 'self' data: file: blob:;">
+  <title>WHEL Recorder</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Frameless Titlebar with Navigation & Status -->
+  <header id="titlebar">
+    <div class="titlebar-logo">
+      <img src="assets/icon.png" alt="WHEL Logo">
+      <span>WHEL RECORDER <small style="font-size: 9px; opacity: 0.6; font-weight: normal; margin-left: 6px; color: var(--color-text-muted);">by Etherious</small></span>
+    </div>
+    
+    <!-- Top Horizontal Navigation -->
+    <nav class="titlebar-nav">
+      <button class="nav-btn active" data-tab="dashboard" title="Dashboard">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-btn" data-tab="gallery" id="nav-btn-gallery" title="Gallery">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+        <span>Gallery</span>
+      </button>
+      <button class="nav-btn" data-tab="settings" title="Settings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Settings</span>
+      </button>
+    </nav>
+
+    <!-- Status indicator directly in titlebar -->
+    <div class="titlebar-status">
+      <span class="status-dot pulse-idle" id="status-dot"></span>
+      <span class="status-text" id="status-text">Idle</span>
+      <span class="hotkeys-summary">Replay: <kbd id="hint-replay">F8</kbd> | Record: <kbd id="hint-record">F9</kbd></span>
+    </div>
+
+    <div class="titlebar-drag-region"></div>
+
+    <div class="titlebar-controls">
+      <button class="titlebar-btn" id="btn-minimize" title="Minimize">
+        <svg viewBox="0 0 10.2 1"><rect x="0" y="0" width="10.2" height="1" fill="currentColor"/></svg>
+      </button>
+      <button class="titlebar-btn" id="btn-maximize" title="Maximize">
+        <svg viewBox="0 0 10 10"><path d="M0,0v10h10V0H0z M9,9H1V1h8V9z" fill="currentColor"/></svg>
+      </button>
+      <button class="titlebar-btn titlebar-btn-close" id="btn-close" title="Close to Tray">
+        <svg viewBox="0 0 10 10"><polygon points="10.2,0.7 9.5,0 5.1,4.4 0.7,0 0,0.7 4.4,5.1 0,9.5 0.7,10.2 5.1,5.8 9.5,10.2 10.2,9.5 5.8,5.1" fill="currentColor"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Window Layout -->
+  <div id="app-container">
+    
+    <!-- Main Content Panel -->
+    <main id="main-content">
+
+      <!-- ==================== DASHBOARD TAB ==================== -->
+      <section class="tab-pane active" id="tab-dashboard">
+        
+        <div class="obs-main-grid">
+          
+          <!-- LEFT SIDEBAR: Sources & Canvas Transforms -->
+          <div class="obs-sidebar-left">
+            
+            <!-- Sources Panel -->
+            <div class="obs-dock sources-dock">
+              <div class="dock-header">
+                <h4>Sources</h4>
+                <button id="btn-add-source" class="icon-btn" title="Add Source">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+              </div>
+              <div class="sources-list" id="sources-list-container">
+                <div class="empty-sources">Click + to add a capture source</div>
+              </div>
+              <!-- Sources Order & Action Buttons -->
+              <div class="sources-actions">
+                <button class="icon-btn" id="btn-source-up" title="Move Layer Up">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                </button>
+                <button class="icon-btn" id="btn-source-down" title="Move Layer Down">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <button class="icon-btn" id="btn-source-transform-reset" title="Reset Layer Transform">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- Canvas & Transforms Settings -->
+            <div class="obs-dock transform-dock">
+              <div class="dock-header">
+                <h4>Canvas Transform</h4>
+              </div>
+              <div class="dock-content">
+
+                <div class="control-row" id="canvas-aspect-row">
+                  <label>Aspect Ratio</label>
+                  <select id="select-canvas-aspect" class="styled-select">
+                    <option value="source">Source Original</option>
+                    <option value="16-9" selected>16:9 (Widescreen)</option>
+                    <option value="16-10">16:10</option>
+                    <option value="4-3">4:3 (Standard)</option>
+                    <option value="21-9">21:9 (Ultrawide)</option>
+                  </select>
+                </div>
+
+                <div class="control-row">
+                  <label>Quick Alignment</label>
+                  <div class="btn-group-grid">
+                    <button class="btn btn-secondary btn-sm" id="btn-trans-center">Center</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-trans-fit">Fit</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-trans-stretch">Stretch</button>
+                  </div>
+                </div>
+
+                <div class="control-row">
+                  <label>Manual Adjustments</label>
+                  <div class="transform-sliders">
+                    <div class="slider-row">
+                      <span>Scale</span>
+                      <input type="range" id="slider-trans-scale" min="0.1" max="2" step="0.05" value="1">
+                      <span id="val-trans-scale">1.0x</span>
+                    </div>
+                    <div class="slider-row">
+                      <span>Pos X</span>
+                      <input type="range" id="slider-trans-x" min="-500" max="500" step="5" value="0">
+                      <span id="val-trans-x">0px</span>
+                    </div>
+                    <div class="slider-row">
+                      <span>Pos Y</span>
+                      <input type="range" id="slider-trans-y" min="-500" max="500" step="5" value="0">
+                      <span id="val-trans-y">0px</span>
+                    </div>
+                    <div class="slider-row">
+                      <span>Rotate</span>
+                      <input type="range" id="slider-trans-rot" min="0" max="360" step="5" value="0">
+                      <span id="val-trans-rot">0°</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="control-row check-row">
+                  <div class="check-container">
+                    <input type="checkbox" id="check-trans-fliph">
+                    <label for="check-trans-fliph">Flip H</label>
+                  </div>
+                  <div class="check-container">
+                    <input type="checkbox" id="check-trans-flipv">
+                    <label for="check-trans-flipv">Flip V</label>
+                  </div>
+                  <div class="check-container">
+                    <input type="checkbox" id="check-trans-lock" checked>
+                    <label for="check-trans-lock">Lock Ratio</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- CENTER PANEL: Live Video Canvas -->
+          <div class="obs-center-area">
+            <div class="obs-preview-area">
+              <div class="preview-header">
+                <h3>Live Capture Canvas</h3>
+                <div class="source-info" id="current-source-label">No source active</div>
+              </div>
+              <div class="video-container" id="video-workspace">
+                <div class="canvas-viewport" id="video-canvas-container">
+                  <!-- Alignment guides -->
+                  <div class="align-guide align-guide-h" id="guide-h" style="display: none;"></div>
+                  <div class="align-guide align-guide-v" id="guide-v" style="display: none;"></div>
+                  <div class="align-guide align-guide-left" id="guide-left" style="display: none;"></div>
+                  <div class="align-guide align-guide-right" id="guide-right" style="display: none;"></div>
+                  <div class="align-guide align-guide-top" id="guide-top" style="display: none;"></div>
+                  <div class="align-guide align-guide-bottom" id="guide-bottom" style="display: none;"></div>
+                  
+                  <canvas id="composite-canvas"></canvas>
+                  
+                  <!-- Recording Timer Overlay -->
+                  <div id="recording-timer-overlay" style="display: none; position: absolute; top: 16px; right: 16px; background: rgba(0,0,0,0.7); padding: 6px 12px; border-radius: 2px; color: #ff4444; font-weight: bold; font-family: monospace; font-size: 16px; align-items: center; gap: 8px; border: 1px solid rgba(255,68,68,0.3); z-index: 100;">
+                    <div style="width: 10px; height: 10px; background: #ff4444; border-radius: 50%;"></div>
+                    <span id="recording-time-text">00:00:00</span>
+                  </div>
+                  
+                  <div class="resizable-source-box" id="resizable-source-box">
+                    <!-- Bounding box resize handles -->
+                    <div class="resize-handle handle-tl" data-handle="tl"></div>
+                    <div class="resize-handle handle-tr" data-handle="tr"></div>
+                    <div class="resize-handle handle-bl" data-handle="bl"></div>
+                    <div class="resize-handle handle-br" data-handle="br"></div>
+                    <div class="resize-handle handle-l" data-handle="l"></div>
+                    <div class="resize-handle handle-r" data-handle="r"></div>
+                    <div class="resize-handle handle-t" data-handle="t"></div>
+                    <div class="resize-handle handle-b" data-handle="b"></div>
+                  </div>
+                  <div class="video-placeholder" id="preview-placeholder">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 7a2 2 0 0 0-2.45-1.45L16 7V5a2 2 0 0 0-2-2H2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2l4.55 1.45A2 2 0 0 0 23 17V7z"/></svg>
+                    <span>Select a source to begin capture</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- RIGHT SIDEBAR: Controls & Resources & Quick Gallery -->
+          <div class="obs-sidebar-right">
+            
+            <!-- Controls Panel -->
+            <div class="obs-dock controls-dock">
+              <div class="dock-header">
+                <h4>Controls</h4>
+              </div>
+              <div class="control-actions">
+                <button class="control-btn btn-emerald" id="btn-toggle-record">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>
+                  <span>Start Recording</span>
+                </button>
+                <button class="control-btn btn-amber" id="btn-pause-record" style="display: none;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                  <span>Pause</span>
+                </button>
+                
+                <button class="control-btn btn-cyan" id="btn-toggle-replay">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                  <span>Start Replay Buffer</span>
+                </button>
+                <button class="control-btn btn-blue" id="btn-save-replay" disabled>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                  <span>Save Replay</span>
+                </button>
+                
+                <button class="control-btn btn-indigo" id="btn-bookmark" disabled style="margin-top: 4px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path></svg>
+                  <span>Bookmark Moment</span>
+                </button>
+                
+                <button class="control-btn btn-dark" onclick="document.querySelector('[data-tab=\'settings\']').click()">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                  <span>Settings</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Resource Usage Stats Panel -->
+            <div class="obs-dock resources-dock">
+              <div class="dock-header">
+                <h4>System Performance</h4>
+              </div>
+              <div class="resources-content">
+                <div class="res-item">
+                  <span>Renderer CPU</span>
+                  <span class="res-val" id="res-cpu">0.4%</span>
+                </div>
+                <div class="res-item">
+                  <span>App Memory</span>
+                  <span class="res-val" id="res-memory">34 MB</span>
+                </div>
+                <div class="res-item">
+                  <span>Replay Memory</span>
+                  <span class="res-val" id="res-replay-cache">0 MB</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Quick Gallery Panel -->
+            <div class="obs-dock quick-gallery-dock">
+              <div class="dock-header">
+                <h4>Recent Clips</h4>
+              </div>
+              <div class="quick-clips-list" id="quick-clips-container">
+                <div class="empty-sources">No recent clips</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- BOTTOM PANEL: Large Audio Mixer -->
+        <div class="obs-bottom-mixer">
+          <div class="dock-header">
+            <h4>Audio Mixer Channels</h4>
+          </div>
+          <div class="horizontal-mixer-container" id="audio-mixer-container">
+            <!-- Inject horizontal audio tracks here -->
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ==================== GALLERY TAB ==================== -->
+      <section class="tab-pane" id="tab-gallery">
+        <div class="gallery-header">
+          <div>
+            <h2>Recordings Gallery</h2>
+            <p class="gallery-folder-info" id="gallery-folder-path">Save Folder: Videos/WHEL Recorder</p>
+          </div>
+          <button class="btn btn-dark" id="btn-gallery-open-folder">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+            Open Save Folder
+          </button>
+        </div>
+
+        <div class="gallery-split-layout">
+          <!-- Left side: Clip List -->
+          <div class="gallery-clips-pane glass-panel">
+            <div class="clips-list" id="clips-list-container">
+              <!-- JS-populated recordings cards -->
+              <div class="empty-gallery">No clips or recordings captured yet. Try enabling the Replay Buffer or record your screen!</div>
+            </div>
+          </div>
+
+          <!-- Right side: Video Player -->
+          <div class="gallery-player-pane glass-panel">
+            <div class="player-container" id="custom-player-container">
+              <video id="gallery-video-player"></video>
+              <div class="player-placeholder" id="player-placeholder">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Select a video from the list to preview</span>
+              </div>
+              
+              <!-- Custom Video Controls -->
+              <div class="custom-video-controls" id="custom-video-controls" style="display: none;">
+                <div class="timeline-container" id="timeline-container">
+                  <input type="range" class="timeline-slider" id="timeline-slider" min="0" max="100" value="0" step="0.1">
+                  <div class="timeline-bookmarks" id="timeline-bookmarks"></div>
+                </div>
+                <div class="controls-row">
+                  <button class="control-btn" id="btn-play-pause">
+                    <svg class="icon-play" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  </button>
+                  <div class="time-display">
+                    <span id="time-current">00:00</span> / <span id="time-total">00:00</span>
+                  </div>
+                  <div class="spacer" style="flex: 1;"></div>
+                  <button class="control-btn" id="btn-volume">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+                  </button>
+                  <input type="range" class="volume-slider-small" id="player-volume-slider" min="0" max="1" step="0.05" value="1">
+                  <button class="control-btn" id="btn-fullscreen">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="player-details" id="player-details-panel" style="display: none;">
+              <h3 id="player-clip-title">clip_name.webm</h3>
+              <div class="player-meta-row">
+                <span id="player-clip-date">June 28, 2026</span>
+                <span id="player-clip-size">14.2 MB</span>
+              </div>
+              
+              <div class="player-bookmarks-row" id="player-bookmarks-row" style="display: none; flex-wrap: wrap; gap: 6px; margin-bottom: 12px;"></div>
+
+              <div class="player-actions">
+                <button class="btn btn-red" id="btn-player-delete">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  Delete Clip
+                </button>
+                <button class="btn btn-cyan" id="btn-player-trim-toggle" style="margin-left: 8px;">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="9.8" y1="8.2" x2="20" y2="17"></line><line x1="9.8" y1="15.8" x2="20" y2="7"></line></svg>
+                  Trim Video
+                </button>
+              </div>
+
+              <!-- Trimmer UI Panel -->
+              <div class="trimmer-panel" id="trimmer-panel" style="display: none; margin-top: 12px; padding: 12px; border: 1px solid var(--border-light); background: rgba(255,255,255,0.01); border-radius: 4px;">
+                <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 11px; color: var(--text-primary); text-transform: uppercase; letter-spacing: 0.5px;">Trim & Export Segment</h4>
+                
+                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; font-size: 9px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase;">Start Time (MM:SS)</label>
+                    <div style="display: flex; gap: 4px;">
+                      <input type="text" id="trim-start" value="00:00" style="width: 100%; padding: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); color: var(--text-primary); border-radius: 2px; font-family: monospace; font-size: 11px;">
+                      <button id="btn-set-trim-start" class="btn" title="Set to current video time" style="padding: 0 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-light); border-radius: 2px; cursor: pointer; color: var(--text-secondary);">📍</button>
+                    </div>
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; font-size: 9px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase;">End Time (MM:SS)</label>
+                    <div style="display: flex; gap: 4px;">
+                      <input type="text" id="trim-end" value="00:10" style="width: 100%; padding: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); color: var(--text-primary); border-radius: 2px; font-family: monospace; font-size: 11px;">
+                      <button id="btn-set-trim-end" class="btn" title="Set to current video time" style="padding: 0 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-light); border-radius: 2px; cursor: pointer; color: var(--text-secondary);">📍</button>
+                    </div>
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 12px;">
+                  <label style="display: block; font-size: 9px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase;">Select Bookmark Moment</label>
+                  <select id="trim-bookmark-select" style="width: 100%; padding: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); color: var(--text-primary); border-radius: 2px; font-size: 11px;">
+                    <option value="">-- No Bookmarks Loaded --</option>
+                  </select>
+                </div>
+
+                <button class="btn btn-emerald" id="btn-trim-export" style="width: 100%;">
+                  Export Cut Segment
+                </button>
+
+                <div id="trim-progress-container" style="display: none; margin-top: 10px;">
+                  <div style="font-size: 10px; color: var(--color-cyan); margin-bottom: 4px;" id="trim-progress-text">Exporting: 0%</div>
+                  <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden;">
+                    <div id="trim-progress-bar" style="width: 0%; height: 100%; background: var(--grad-cyan); transition: width 0.1s;"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== SETTINGS TAB ==================== -->
+      <section class="tab-pane" id="tab-settings">
+        <h2>Application Settings</h2>
+
+        <!-- Settings Sub-Tabs -->
+        <div class="settings-subtabs">
+          <button class="settings-subtab active" data-stab="output">Output</button>
+          <button class="settings-subtab" data-stab="video">Video</button>
+          <button class="settings-subtab" data-stab="audio">Audio</button>
+          <button class="settings-subtab" data-stab="replay">Replay Buffer</button>
+          <button class="settings-subtab" data-stab="hotkeys">Hotkeys</button>
+          <button class="settings-subtab" data-stab="general">General</button>
+        </div>
+
+        <!-- ===== OUTPUT SUB-TAB ===== -->
+        <div class="settings-subpane active" id="stab-output">
+          <div class="settings-grid">
+            <div class="settings-column">
+              <h3>Recording</h3>
+
+              <div class="setting-row">
+                <label>Recording Format</label>
+                <select id="select-format" class="styled-select">
+                  <option value="webm">WebM (VP9/VP8 + Opus)</option>
+                  <option value="mkv">MKV (VP9/VP8 + Opus)</option>
+                </select>
+                <div class="setting-desc">WebM is widely supported. MKV is recoverable if the app crashes.</div>
+              </div>
+
+              <div class="setting-row">
+                <label>Encoder</label>
+                <select id="select-encoder" class="styled-select">
+                  <option value="vp9">VP9 (Hardware Accelerated)</option>
+                  <option value="vp8">VP8 (Software Fallback)</option>
+                  <option value="h264">H.264 / AVC (If Supported)</option>
+                </select>
+                <div class="setting-desc">VP9 provides best quality-to-size ratio. H.264 has widest compatibility.</div>
+              </div>
+
+              <div class="setting-row">
+                <label>Rate Control</label>
+                <select id="select-rate-control" class="styled-select">
+                  <option value="cbr">CBR (Constant Bitrate)</option>
+                  <option value="vbr">VBR (Variable Bitrate)</option>
+                  <option value="cqp">CQP (Constant Quality)</option>
+                </select>
+                <div class="setting-desc">CBR: consistent file sizes. VBR: better quality in motion. CQP: best visual quality.</div>
+              </div>
+
+              <!-- CQP Level (shown only when CQP is selected) -->
+              <div class="setting-row" id="row-cqp-level">
+                <div class="label-row">
+                  <label>CQ Level (CQP)</label>
+                  <span class="value-display" id="val-cqp-level">23</span>
+                </div>
+                <input type="range" id="slider-cqp-level" min="0" max="51" step="1" value="23">
+                <div class="setting-desc">Lower = higher quality, larger files. 18-23 is visually lossless. 0 = lossless.</div>
+              </div>
+
+              <div class="setting-row" id="row-video-bitrate">
+                <div class="label-row">
+                  <label>Video Bitrate</label>
+                  <span class="value-display" id="val-video-bitrate">8000 Kbps</span>
+                </div>
+                <input type="range" id="slider-video-bitrate" min="1000" max="50000" step="500" value="8000">
+                <div class="setting-desc">Higher bitrate = better quality, larger files.</div>
+              </div>
+            </div>
+
+            <div class="settings-column">
+              <h3>Audio Output</h3>
+
+              <div class="setting-row">
+                <label>Audio Encoder</label>
+                <select id="select-audio-encoder" class="styled-select">
+                  <option value="opus">Opus (Recommended)</option>
+                  <option value="aac">AAC (Compatibility)</option>
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <div class="label-row">
+                  <label>Audio Bitrate</label>
+                  <span class="value-display" id="val-audio-bitrate">128 Kbps</span>
+                </div>
+                <input type="range" id="slider-audio-bitrate" min="64" max="320" step="32" value="128">
+                <div class="setting-desc">128 Kbps is good for voice. 192-320 for music/game audio.</div>
+              </div>
+
+              <div class="divider"></div>
+
+              <h3>File Output</h3>
+              <div class="setting-row">
+                <label>File Name Template</label>
+                <input type="text" id="input-filename-template" class="styled-input" value="{type}_{date}_{time}" placeholder="{type}_{date}_{time}">
+                <div class="setting-desc">Variables: {type}, {date}, {time}, {source}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== VIDEO SUB-TAB ===== -->
+        <div class="settings-subpane" id="stab-video">
+          <div class="settings-grid">
+            <div class="settings-column">
+              <h3>Resolution</h3>
+
+              <div class="setting-row">
+                <label>Base (Canvas) Resolution</label>
+                <select id="select-base-resolution" class="styled-select">
+                  <option value="2560x1440">2560x1440 (1440p)</option>
+                  <option value="1920x1080" selected>1920x1080 (1080p)</option>
+                  <option value="1280x720">1280x720 (720p)</option>
+                  <option value="854x480">854x480 (480p)</option>
+                </select>
+                <div class="setting-desc">The resolution your scene is rendered at.</div>
+              </div>
+
+              <div class="setting-row">
+                <label>Output (Scaled) Resolution</label>
+                <select id="select-output-resolution" class="styled-select">
+                  <option value="same">Same as Canvas</option>
+                  <option value="2560x1440">2560x1440 (1440p)</option>
+                  <option value="1920x1080">1920x1080 (1080p)</option>
+                  <option value="1280x720">1280x720 (720p)</option>
+                  <option value="854x480">854x480 (480p)</option>
+                </select>
+                <div class="setting-desc">Downscale your output if your base resolution is too high.</div>
+              </div>
+
+              <div class="setting-row">
+                <label>Downscale Filter</label>
+                <select id="select-downscale-filter" class="styled-select">
+                  <option value="bilinear">Bilinear (Fastest, less quality)</option>
+                  <option value="bicubic" selected>Bicubic (Good balance)</option>
+                  <option value="lanczos">Lanczos (Best quality, slower)</option>
+                </select>
+              </div>
+
+              <div class="divider"></div>
+
+              <h3>Framerate</h3>
+              <div class="setting-row">
+                <label>FPS Type</label>
+                <select id="select-fps-type" class="styled-select">
+                  <option value="common">Common FPS Values</option>
+                  <option value="integer">Integer FPS Value</option>
+                </select>
+              </div>
+
+              <div class="setting-row" id="row-common-fps">
+                <label>Common FPS</label>
+                <select id="select-fps" class="styled-select">
+                  <option value="120">120 FPS</option>
+                  <option value="60" selected>60 FPS</option>
+                  <option value="48">48 FPS</option>
+                  <option value="30">30 FPS</option>
+                  <option value="24">24 FPS</option>
+                </select>
+              </div>
+
+              <div class="setting-row" id="row-integer-fps" style="display: none;">
+                <div class="label-row">
+                  <label>FPS Value</label>
+                  <span class="value-display" id="val-integer-fps">60</span>
+                </div>
+                <input type="range" id="slider-integer-fps" min="10" max="240" step="1" value="60">
+              </div>
+            </div>
+
+            <div class="settings-column">
+              <h3>Advanced Video</h3>
+
+              <div class="setting-row">
+                <label>Color Format</label>
+                <select id="select-color-format" class="styled-select">
+                  <option value="nv12" selected>NV12 (Default)</option>
+                  <option value="i420">I420</option>
+                  <option value="i444">I444 (High Quality)</option>
+                  <option value="rgb">RGB</option>
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <label>Color Space</label>
+                <select id="select-color-space" class="styled-select">
+                  <option value="601">601 (SD Content)</option>
+                  <option value="709" selected>709 (HD Content)</option>
+                  <option value="2100">2100 (HDR)</option>
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <label>Color Range</label>
+                <select id="select-color-range" class="styled-select">
+                  <option value="partial">Partial (Limited)</option>
+                  <option value="full" selected>Full</option>
+                </select>
+              </div>
+
+              <div class="divider"></div>
+
+              <h3>Transformation</h3>
+
+              <div class="setting-row">
+                <label>Flip Horizontal</label>
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-flip-h">
+                  <label for="checkbox-flip-h">Mirror the output horizontally</label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <label>Flip Vertical</label>
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-flip-v">
+                  <label for="checkbox-flip-v">Flip the output vertically</label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <label>Rotation</label>
+                <select id="select-rotation" class="styled-select">
+                  <option value="0">0° (None)</option>
+                  <option value="90">90° CW</option>
+                  <option value="180">180°</option>
+                  <option value="270">270° CW</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== AUDIO SUB-TAB ===== -->
+        <div class="settings-subpane" id="stab-audio">
+          <div class="settings-grid">
+            <div class="settings-column">
+              <h3>Audio Input Devices</h3>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-mic-enabled">
+                  <label for="checkbox-mic-enabled">Enable Microphone / Auxiliary Input</label>
+                </div>
+              </div>
+
+              <div class="setting-row" id="mic-device-row" style="display: none;">
+                <label>Microphone Device</label>
+                <select id="select-mic-device" class="styled-select">
+                  <option value="default">System Default</option>
+                </select>
+              </div>
+
+              <div class="divider"></div>
+
+              <h3>Desktop Audio</h3>
+              <div class="setting-desc" style="margin-bottom: 12px;">Application audio is automatically captured per-source when you add a Window source. Each source gets its own mixer channel.</div>
+
+              <!-- Hidden legacy fields -->
+              <div style="display: none;">
+                <input type="checkbox" id="checkbox-isolated-audio">
+                <select id="select-isolated-process"><option value="">--</option></select>
+                <div id="isolated-process-row"></div>
+              </div>
+            </div>
+
+            <div class="settings-column">
+              <h3>Audio Monitoring</h3>
+
+              <div class="setting-row">
+                <label>Sample Rate</label>
+                <select id="select-sample-rate" class="styled-select">
+                  <option value="44100">44.1 kHz</option>
+                  <option value="48000" selected>48 kHz (Recommended)</option>
+                </select>
+              </div>
+
+              <div class="setting-row">
+                <label>Audio Channels</label>
+                <select id="select-audio-channels" class="styled-select">
+                  <option value="mono">Mono</option>
+                  <option value="stereo" selected>Stereo</option>
+                </select>
+              </div>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-separate-tracks">
+                  <label for="checkbox-separate-tracks">Record audio tracks separately (per source)</label>
+                </div>
+                <div class="setting-desc">When enabled, each audio source is saved as a separate track in the output file for post-production mixing.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== REPLAY BUFFER SUB-TAB ===== -->
+        <div class="settings-subpane" id="stab-replay">
+          <div class="settings-grid">
+            <div class="settings-column">
+              <h3>Replay Buffer Configuration</h3>
+
+              <div class="setting-row">
+                <div class="label-row">
+                  <label>Maximum Replay Time</label>
+                  <span class="value-display" id="val-replay-length">30s</span>
+                </div>
+                <input type="range" id="slider-replay-length" min="5" max="3600" step="5" value="30">
+                <div class="setting-desc">How far back the replay buffer saves. Up to 1 hour (3600s). Longer = more RAM usage.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="label-row">
+                  <label>Maximum Memory (RAM) Limit</label>
+                  <span class="value-display" id="val-replay-ram">512 MB</span>
+                </div>
+                <input type="range" id="slider-replay-ram" min="128" max="8192" step="128" value="512">
+                <div class="setting-desc">Maximum RAM allocated for the replay buffer. Increase for longer/higher quality replays.</div>
+              </div>
+
+              <div class="setting-row">
+                <div class="info-card">
+                  <h4>Estimated Buffer Size</h4>
+                  <div class="info-stats">
+                    <div class="info-stat">
+                      <span class="info-label">Duration</span>
+                      <span class="info-value" id="info-replay-duration">30 seconds</span>
+                    </div>
+                    <div class="info-stat">
+                      <span class="info-label">Est. File Size</span>
+                      <span class="info-value" id="info-replay-filesize">~30 MB</span>
+                    </div>
+                    <div class="info-stat">
+                      <span class="info-label">RAM Usage</span>
+                      <span class="info-value" id="info-replay-ram-usage">~30 MB of 512 MB</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-column">
+              <h3>Replay Behavior</h3>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-auto-replay" checked>
+                  <label for="checkbox-auto-replay">Auto-start replay buffer on launch</label>
+                </div>
+                <div class="setting-desc">Automatically begins buffering when the app starts.</div>
+              </div>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-replay-notify" checked>
+                  <label for="checkbox-replay-notify">Show notification on replay save</label>
+                </div>
+              </div>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-replay-sound">
+                  <label for="checkbox-replay-sound">Play sound on replay save</label>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== HOTKEYS SUB-TAB ===== -->
+        <div class="settings-subpane" id="stab-hotkeys">
+          <div class="settings-grid">
+            <div class="settings-column">
+              <h3>Recording Hotkeys</h3>
+              <p class="setting-desc">Click "Record" then press any key combination to set a global shortcut.</p>
+
+              <div class="setting-row hotkey-row">
+                <label>Start / Stop Recording</label>
+                <div class="hotkey-input-container">
+                  <input type="text" id="input-hotkey-record" readonly value="F9">
+                  <button class="btn btn-secondary btn-sm" id="btn-record-hotkey-record">Record</button>
+                </div>
+              </div>
+
+              <div class="setting-row hotkey-row">
+                <label>Pause / Resume Recording</label>
+                <div class="hotkey-input-container">
+                  <input type="text" id="input-hotkey-pause" readonly value="Shift+F9">
+                  <button class="btn btn-secondary btn-sm" id="btn-record-hotkey-pause">Record</button>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <h3>Replay Buffer Hotkeys</h3>
+
+              <div class="setting-row hotkey-row">
+                <label>Save Replay Clip</label>
+                <div class="hotkey-input-container">
+                  <input type="text" id="input-hotkey-replay" readonly value="F8">
+                  <button class="btn btn-secondary btn-sm" id="btn-record-hotkey-replay">Record</button>
+                </div>
+              </div>
+
+              <div class="setting-row hotkey-row">
+                <label>Start / Stop Replay Buffer</label>
+                <div class="hotkey-input-container">
+                  <input type="text" id="input-hotkey-toggle-replay" readonly value="Shift+F8">
+                  <button class="btn btn-secondary btn-sm" id="btn-record-hotkey-toggle-replay">Record</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-column">
+              <h3>General Hotkeys</h3>
+
+              <div class="setting-row hotkey-row">
+                <label>Mute / Unmute Microphone</label>
+                <div class="hotkey-input-container">
+                  <input type="text" id="input-hotkey-mute-mic" readonly value="F7">
+                  <button class="btn btn-secondary btn-sm" id="btn-record-hotkey-mute-mic">Record</button>
+                </div>
+              </div>
+
+              <div class="setting-row hotkey-row">
+                <label>Mute / Unmute Desktop Audio</label>
+                <div class="hotkey-input-container">
+                  <input type="text" id="input-hotkey-mute-desktop" readonly value="F6">
+                  <button class="btn btn-secondary btn-sm" id="btn-record-hotkey-mute-desktop">Record</button>
+                </div>
+              </div>
+
+              <div class="setting-row hotkey-row">
+                <label>Bookmark Moment</label>
+                <div class="hotkey-input-container">
+                  <input type="text" id="input-hotkey-bookmark" readonly value="F10">
+                  <button class="btn btn-secondary btn-sm" id="btn-record-hotkey-bookmark">Record</button>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <div class="setting-row">
+                <div class="alert alert-info">
+                  <strong>Tip:</strong> Use modifier keys (Ctrl, Alt, Shift) to create unique combinations that won't conflict with your games.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== GENERAL SUB-TAB ===== -->
+        <div class="settings-subpane" id="stab-general">
+          <div class="settings-grid">
+            <div class="settings-column">
+              <h3>System Behavior</h3>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-minimize-tray" checked>
+                  <label for="checkbox-minimize-tray">Minimize to system tray on close</label>
+                </div>
+              </div>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-start-minimized">
+                  <label for="checkbox-start-minimized">Start minimized to tray</label>
+                </div>
+              </div>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-start-with-windows">
+                  <label for="checkbox-start-with-windows">Launch on Windows startup</label>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <h3>Performance</h3>
+              <div class="setting-row">
+                <label>Process Priority</label>
+                <select id="select-process-priority" class="styled-select">
+                  <option value="normal">Normal</option>
+                  <option value="above-normal" selected>Above Normal (Recommended)</option>
+                  <option value="high">High</option>
+                </select>
+                <div class="setting-desc">Higher priority helps prevent frame drops but may affect game performance.</div>
+              </div>
+            </div>
+
+            <div class="settings-column">
+              <h3>Notifications</h3>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-notify-record" checked>
+                  <label for="checkbox-notify-record">Show notification when recording starts/stops</label>
+                </div>
+              </div>
+
+              <div class="setting-row check-row">
+                <div class="check-container">
+                  <input type="checkbox" id="checkbox-notify-replay" checked>
+                  <label for="checkbox-notify-replay">Show notification when replay is saved</label>
+                </div>
+              </div>
+
+              <div class="divider"></div>
+
+              <h3>About</h3>
+              <div class="about-card">
+                <div class="about-name">WHEL Recorder</div>
+                <div class="about-version">Version 1.0.0</div>
+                <div class="about-developer" style="font-size: 0.85rem; color: var(--color-text-muted); margin-bottom: 8px;">Created by Etherious</div>
+                <div class="about-desc">A lightweight screen recorder with replay buffer, per-application audio capture, and a premium customizable studio layout interface.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Standard Javascript Loader -->
+  <!-- Modals -->
+  <div id="modal-add-source" class="modal-overlay" style="display: none;">
+    <div class="modal-content glass-panel">
+      <div class="modal-header">
+        <h3>Add Capture Source</h3>
+        <button id="btn-close-modal-source" class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-sources-grid" class="sources-grid">
+          <div class="source-loading">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Right-Click Context Menu -->
+  <div id="canvas-context-menu" class="canvas-context-menu" style="display: none;">
+    <div class="context-item" id="ctx-trans-fit">Fit to Screen</div>
+    <div class="context-item" id="ctx-trans-stretch">Stretch to Screen</div>
+    <div class="context-item" id="ctx-trans-center">Center</div>
+    <div class="context-item" id="ctx-trans-reset">Reset Transform</div>
+    <div class="context-divider"></div>
+    <div class="context-item" id="ctx-trans-fliph">Flip Horizontal</div>
+    <div class="context-item" id="ctx-trans-flipv">Flip Vertical</div>
+    <div class="context-divider"></div>
+    <div class="context-item" id="ctx-trans-up">Move Layer Up</div>
+    <div class="context-item" id="ctx-trans-down">Move Layer Down</div>
+    <div class="context-item" id="ctx-trans-top">Bring to Front</div>
+    <div class="context-item" id="ctx-trans-bottom">Send to Back</div>
+    <div class="context-divider"></div>
+    <div class="context-item" id="ctx-trans-remove" style="color: #ff4a4a;">Remove Source</div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
