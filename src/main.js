@@ -4,6 +4,16 @@ const fs = require('fs');
 const os = require('os');
 const { startAudioCapture, stopAudioCapture, getActiveWindowProcessIds, setExecutablesRoot } = require('application-loopback');
 
+process.on('uncaughtException', (error) => {
+  fs.appendFileSync(path.join(app.getPath('userData'), 'whel-debug.log'), `\n[FATAL] Uncaught Exception: ${error.stack}\n`);
+  dialog.showErrorBox('Fatal Error', `An unexpected error occurred. Please check the logs at ${app.getPath('userData')}\\whel-debug.log`);
+  app.quit();
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  fs.appendFileSync(path.join(app.getPath('userData'), 'whel-debug.log'), `\n[FATAL] Unhandled Rejection: ${reason}\n`);
+});
+
 if (app.isPackaged) {
   const unpackedBinPath = path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', 'application-loopback', 'bin');
   setExecutablesRoot(unpackedBinPath);
@@ -53,9 +63,13 @@ function logDebug(message) {
 }
 
 // Initial directory check
-if (!fs.existsSync(recordingDir)) {
-  fs.mkdirSync(recordingDir, { recursive: true });
-  logDebug(`Created recording directory: ${recordingDir}`);
+try {
+  if (!fs.existsSync(recordingDir)) {
+    fs.mkdirSync(recordingDir, { recursive: true });
+    logDebug(`Created recording directory: ${recordingDir}`);
+  }
+} catch (e) {
+  logDebug(`Failed to create recording directory (might be blocked by Windows Defender): ${e.message}`);
 }
 
 // Load configurations
