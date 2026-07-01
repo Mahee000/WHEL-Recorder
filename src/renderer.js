@@ -368,6 +368,13 @@ async function initApp() {
   loadGallery();
   loadMicrophones();
   
+  // 8. Auto start replay buffer
+  if (config.autoReplay) {
+    setTimeout(() => {
+      startReplayBuffer();
+    }, 1000); // Small delay to allow audio/sources to initialize
+  }
+  
   // Initialize Mic if enabled
   if (config.micEnabled) {
     setupMicAudioGraph();
@@ -494,7 +501,7 @@ function getDefaults() {
     // General
     minimizeToTray: true,
     startMinimized: false,
-    startWithWindows: false,
+    autoLaunch: false,
     processPriority: 'above-normal',
     notifyRecord: true,
     notifyReplay: true
@@ -579,7 +586,7 @@ function syncSettingsUI() {
   if (selectAppTheme) selectAppTheme.value = config.appTheme || 'classic-obsidian';
   checkboxMinimizeTray.checked = config.minimizeToTray;
   if (checkboxStartMinimized) checkboxStartMinimized.checked = config.startMinimized;
-  if (checkboxStartWithWindows) checkboxStartWithWindows.checked = config.startWithWindows;
+  if (checkboxStartWithWindows) checkboxStartWithWindows.checked = config.autoLaunch;
   if (selectProcessPriority) selectProcessPriority.value = config.processPriority;
   if (checkboxNotifyRecord) checkboxNotifyRecord.checked = config.notifyRecord;
   if (checkboxNotifyReplay) checkboxNotifyReplay.checked = config.notifyReplay;
@@ -1937,7 +1944,7 @@ function setupEventListeners() {
   // Settings sync - General
   if (checkboxMinimizeTray) checkboxMinimizeTray.addEventListener('change', e => { config.minimizeToTray = e.target.checked; saveLocalConfig(); });
   if (checkboxStartMinimized) checkboxStartMinimized.addEventListener('change', e => { config.startMinimized = e.target.checked; saveLocalConfig(); });
-  if (checkboxStartWithWindows) checkboxStartWithWindows.addEventListener('change', e => { config.startWithWindows = e.target.checked; saveLocalConfig(); });
+  if (checkboxStartWithWindows) checkboxStartWithWindows.addEventListener('change', e => { config.autoLaunch = e.target.checked; saveLocalConfig(); });
   if (selectProcessPriority) selectProcessPriority.addEventListener('change', e => { config.processPriority = e.target.value; saveLocalConfig(); });
   if (checkboxNotifyRecord) checkboxNotifyRecord.addEventListener('change', e => { config.notifyRecord = e.target.checked; saveLocalConfig(); });
   if (checkboxNotifyReplay) checkboxNotifyReplay.addEventListener('change', e => { config.notifyReplay = e.target.checked; saveLocalConfig(); });
