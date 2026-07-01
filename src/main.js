@@ -72,7 +72,19 @@ ipcMain.handle('load-scene', async (event) => {
 });
 
 // Paths
-const recordingDir = path.join(app.getPath('videos'), 'WHEL Recorder');
+app.setAppUserModelId('WHEL.Recorder');
+
+let recordingDir = path.join(app.getPath('videos'), 'WHEL Recorder');
+
+function updateRecordingDir() {
+  if (config.recordingDir) {
+    recordingDir = config.recordingDir;
+  }
+  if (!fs.existsSync(recordingDir)) {
+    fs.mkdirSync(recordingDir, { recursive: true });
+    logDebug(`Created recording directory: ${recordingDir}`);
+  }
+}
 const configPath = path.join(app.getPath('userData'), 'whel-config.json');
 const logPath = path.join(app.getPath('userData'), 'whel-debug.log');
 
@@ -138,8 +150,8 @@ function loadConfig() {
     micEchoCancellation: false,
     micAGC: false,
     micNoiseGate: false,
-    micVolume: 100,
-    systemVolume: 100,
+    micVolume: 1.0,
+    systemVolume: 1.0,
     isolatedAudio: false,
     isolatedProcessName: '',
     isolatedProcessPid: null,
@@ -165,9 +177,10 @@ function loadConfig() {
       logDebug(`Config Path: ${configPath}`);
       logDebug(`Config Content: ${rawContent}`);
       config = { ...defaults, ...JSON.parse(rawContent) };
-      logDebug('Configurations loaded successfully.');
+      logDebug('Configurations loaded.');
       applyProcessPriority();
       applyAutoLaunch();
+      updateRecordingDir();
     } else {
       config = defaults;
       saveConfig(config);
@@ -219,6 +232,8 @@ function saveConfig(newConfig) {
     logDebug('Configurations saved.');
     applyProcessPriority();
     applyAutoLaunch();
+    updateRecordingDir();
+    registerGlobalHotkeys();
   } catch (e) {
     logDebug(`Failed to save configurations: ${e.message}`);
   }
@@ -532,12 +547,23 @@ ipcMain.handle('get-gallery-files', async () => {
 
 ipcMain.handle('open-gallery-folder', async () => {
   try {
+    updateRecordingDir();
     await shell.openPath(recordingDir);
     return true;
   } catch (e) {
     logDebug(`Failed to open gallery folder: ${e.message}`);
     return false;
   }
+});
+
+ipcMain.handle('select-directory', async (event) => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  });
+  if (!result.canceled && result.filePaths.length > 0) {
+    return result.filePaths[0];
+  }
+  return null;
 });
 
 ipcMain.handle('delete-gallery-file', async (event, filename) => {

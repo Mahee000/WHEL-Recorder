@@ -45,6 +45,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openGalleryFolder: () => ipcRenderer.invoke('open-gallery-folder'),
   deleteGalleryFile: (filename) => ipcRenderer.invoke('delete-gallery-file', filename),
   getVideosPath: () => ipcRenderer.invoke('get-videos-path'),
+  selectDirectory: () => ipcRenderer.invoke('select-directory'),
 
   // Hotkeys
   registerHotkey: (action, hotkeyStr) => ipcRenderer.invoke('register-hotkey', action, hotkeyStr),

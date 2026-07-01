@@ -89,6 +89,8 @@ const btnCloseModalSource = document.getElementById('btn-close-modal-source');
 const modalSourcesGrid = document.getElementById('modal-sources-grid');
 
 // Settings Elements - Output
+const inputSavePath = document.getElementById('input-save-path');
+const btnBrowsePath = document.getElementById('btn-browse-path');
 const selectFormat = document.getElementById('select-format');
 const selectEncoder = document.getElementById('select-encoder');
 const selectRateControl = document.getElementById('select-rate-control');
@@ -452,6 +454,7 @@ async function loadLocalConfig() {
 function getDefaults() {
   return {
     // Output
+    recordingDir: '',
     format: 'webm',
     encoder: 'vp9',
     rateControl: 'cbr',
@@ -521,6 +524,7 @@ function saveLocalConfig() {
 
 function syncSettingsUI() {
   // Output
+  if (inputSavePath) inputSavePath.value = config.recordingDir || '';
   if (selectFormat) selectFormat.value = config.format;
   if (selectEncoder) selectEncoder.value = config.encoder;
   if (selectRateControl) selectRateControl.value = config.rateControl;
@@ -1884,6 +1888,16 @@ function setupEventListeners() {
   }
 
   // Settings sync - Output
+  if (btnBrowsePath) {
+    btnBrowsePath.addEventListener('click', async () => {
+      const selected = await window.electronAPI.selectDirectory();
+      if (selected) {
+        config.recordingDir = selected;
+        if (inputSavePath) inputSavePath.value = selected;
+        saveLocalConfig();
+      }
+    });
+  }
   if (selectFormat) selectFormat.addEventListener('change', e => { config.format = e.target.value; saveLocalConfig(); });
   if (selectEncoder) selectEncoder.addEventListener('change', e => { config.encoder = e.target.value; saveLocalConfig(); });
   if (selectRateControl) selectRateControl.addEventListener('change', e => { config.rateControl = e.target.value; saveLocalConfig(); });

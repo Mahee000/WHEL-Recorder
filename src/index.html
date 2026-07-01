@@ -437,6 +437,14 @@
           <div class="settings-grid">
             <div class="settings-column">
               <h3>Recording</h3>
+              <div class="setting-row">
+                <label>Recording Path</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="input-save-path" class="styled-input" readonly style="flex: 1; padding: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-light); color: var(--text-primary); border-radius: 4px;" placeholder="Default Videos Folder">
+                  <button id="btn-browse-path" class="btn">Browse</button>
+                </div>
+                <div class="setting-desc">Where to save standard recordings and replay buffer clips.</div>
+              </div>
 
               <div class="setting-row">
                 <label>Recording Format</label>
