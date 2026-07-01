@@ -13,7 +13,7 @@
     "appId": "com.etherious.whelrecorder",
     "productName": "WHEL Recorder",
     "directories": {
-      "output": "dist"
+      "output": "dist/${version}"
     },
     "files": [
       "src/**/*",

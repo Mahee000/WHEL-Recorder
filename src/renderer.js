@@ -1119,6 +1119,8 @@ function createMicMixerUI() {
     mixerUI.container.classList.add('muted');
     mixerUI.slider.value = 0;
     mixerUI.muteBtn.querySelector('.mute-icon').innerHTML = '<line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v6a3 3 0 0 0 5.12 2.12M18.36 5.64A9 9 0 0 1 20.07 15M11 5L6 9H2v6h4l5 4V5z"></path>';
+    const pctSpan = mixerUI.container.querySelector('.volume-percentage');
+    if (pctSpan) pctSpan.innerText = '0%';
   }
   
   mixerUI.slider.addEventListener('input', (e) => {
@@ -1132,17 +1134,20 @@ function createMicMixerUI() {
   
   mixerUI.muteBtn.addEventListener('click', () => {
     micMuted = !micMuted;
+    const pctSpan = mixerUI.container.querySelector('.volume-percentage');
     if (micMuted) {
       if (micGainNode) micGainNode.gain.value = 0;
       mixerUI.container.classList.add('muted');
       mixerUI.slider.value = 0;
       mixerUI.muteBtn.querySelector('.mute-icon').innerHTML = '<line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v6a3 3 0 0 0 5.12 2.12M18.36 5.64A9 9 0 0 1 20.07 15M11 5L6 9H2v6h4l5 4V5z"></path>';
+      if (pctSpan) pctSpan.innerText = '0%';
     } else {
       const vol = config.micVolume !== undefined ? config.micVolume : 1.0;
       if (micGainNode) micGainNode.gain.value = vol;
       mixerUI.container.classList.remove('muted');
       mixerUI.slider.value = vol;
       mixerUI.muteBtn.querySelector('.mute-icon').innerHTML = '<path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07" class="sound-wave"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14" class="sound-wave"></path>';
+      if (pctSpan) pctSpan.innerText = Math.round(vol * 100) + '%';
     }
   });
   
@@ -1171,17 +1176,20 @@ function toggleDesktopMute() {
     const container = mapObj.uiContainer;
     const slider = container.querySelector('.volume-slider');
     const muteBtn = container.querySelector('.mute-btn');
+    const pctSpan = container.querySelector('.volume-percentage');
     
     if (systemMuted) {
-      mapObj.gainNode.gain.value = 0;
+      if (mapObj.gainNode) mapObj.gainNode.gain.value = 0;
       container.classList.add('muted');
       slider.value = 0;
       muteBtn.querySelector('.mute-icon').innerHTML = '<line x1="1" y1="1" x2="23" y2="23"></line><path d="M9 9v6a3 3 0 0 0 5.12 2.12M18.36 5.64A9 9 0 0 1 20.07 15M11 5L6 9H2v6h4l5 4V5z"></path>';
+      if (pctSpan) pctSpan.innerText = '0%';
     } else {
-      mapObj.gainNode.gain.value = vol;
+      if (mapObj.gainNode) mapObj.gainNode.gain.value = vol;
       container.classList.remove('muted');
       slider.value = vol;
       muteBtn.querySelector('.mute-icon').innerHTML = '<path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07" class="sound-wave"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14" class="sound-wave"></path>';
+      if (pctSpan) pctSpan.innerText = Math.round(vol * 100) + '%';
     }
   });
 
@@ -1202,7 +1210,8 @@ function createMixerUI(label, defaultGain) {
   const initPct = Math.round(defaultGain * 100);
   div.innerHTML = `
     <div class="meter-labels">
-      <label>${label} <span class="volume-percentage" style="font-size: 11px; color: var(--text-secondary); margin-left: 8px; font-weight: normal;">${initPct}%</span></label>
+      <label>${label}</label>
+      <span class="volume-percentage">${initPct}%</span>
       <button class="mute-btn" title="Mute/Unmute" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;padding: 2px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mute-icon">
           <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
@@ -1323,6 +1332,9 @@ function getMimeTypeAndExtension() {
   if (format === 'mkv') {
     container = 'video/x-matroska';
     fileExt = 'mkv';
+  } else if (format === 'mp4') {
+    container = 'video/mp4';
+    fileExt = 'mp4';
   }
   
   let mimeType = `${container};codecs=${encoder},opus`;
@@ -1725,7 +1737,7 @@ async function saveReplayBuffer() {
   
   debugLog('Saving replay buffer to file...');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const fileExt = (config.format === 'mkv') ? 'mkv' : 'webm';
+  const fileExt = config.format || 'webm';
   const filename = `replay_${timestamp}.${fileExt}`;
   
   const chunksToSave = [replayHeader, ...replayQueue];
@@ -2125,7 +2137,21 @@ function setupEventListeners() {
 
 function setupHotkeyListener() {
   const bindHotkey = (btn, input, keyName) => {
-    if (btn) btn.addEventListener('click', () => { hotkeyToRecord = keyName; input.focus(); input.value = 'Press key...'; });
+    if (btn) {
+      btn.addEventListener('click', () => { 
+        hotkeyToRecord = keyName; 
+        input.focus(); 
+        input.value = 'Press key...'; 
+      });
+    }
+    if (input) {
+      input.addEventListener('blur', () => {
+        if (hotkeyToRecord === keyName) {
+          hotkeyToRecord = null;
+          if (typeof renderSettings === 'function') renderSettings();
+        }
+      });
+    }
   };
 
   bindHotkey(btnRecordHotkeyReplay, inputHotkeyReplay, 'replay');
@@ -2139,40 +2165,50 @@ function setupHotkeyListener() {
   document.addEventListener('keydown', (e) => {
     if (hotkeyToRecord) {
       e.preventDefault();
+      e.stopPropagation();
       
       const key = e.key.toUpperCase();
-      const mods = [];
-      if (e.ctrlKey && key !== 'CONTROL') mods.push('CommandOrControl');
-      if (e.altKey && key !== 'ALT') mods.push('Alt');
-      if (e.shiftKey && key !== 'SHIFT') mods.push('Shift');
-      
-      if (['CONTROL', 'ALT', 'SHIFT', 'META'].includes(key)) return;
 
-      const fullHotkey = [...mods, key].join('+');
+      if (key === 'ESCAPE') {
+        hotkeyToRecord = null;
+        document.activeElement.blur();
+        // Trigger a re-render of settings UI to restore the original input value
+        if (typeof renderSettings === 'function') renderSettings();
+        return;
+      }
+
+      let fullHotkey = '';
+
+      if (key !== 'BACKSPACE' && key !== 'DELETE') {
+        const mods = [];
+        if (e.ctrlKey && key !== 'CONTROL') mods.push('CommandOrControl');
+        if (e.altKey && key !== 'ALT') mods.push('Alt');
+        if (e.shiftKey && key !== 'SHIFT') mods.push('Shift');
+        
+        if (['CONTROL', 'ALT', 'SHIFT', 'META'].includes(key)) return;
+
+        fullHotkey = [...mods, key].join('+');
+      }
 
       if (hotkeyToRecord === 'replay') {
         config.hotkeyReplay = fullHotkey;
-        window.electronAPI.registerHotkey('save-replay', fullHotkey);
       } else if (hotkeyToRecord === 'record') {
         config.hotkeyRecord = fullHotkey;
-        window.electronAPI.registerHotkey('toggle-record', fullHotkey);
       } else if (hotkeyToRecord === 'pause') {
         config.hotkeyPause = fullHotkey;
-        // window.electronAPI.registerHotkey('pause-record', fullHotkey);
       } else if (hotkeyToRecord === 'toggleReplay') {
         config.hotkeyToggleReplay = fullHotkey;
-        // window.electronAPI.registerHotkey('toggle-replay', fullHotkey);
       } else if (hotkeyToRecord === 'muteMic') {
         config.hotkeyMuteMic = fullHotkey;
       } else if (hotkeyToRecord === 'muteDesktop') {
         config.hotkeyMuteDesktop = fullHotkey;
       } else if (hotkeyToRecord === 'bookmark') {
         config.hotkeyBookmark = fullHotkey;
-        window.electronAPI.registerHotkey('bookmark', fullHotkey);
       }
       
       hotkeyToRecord = null;
       saveLocalConfig();
+      if (typeof renderSettings === 'function') renderSettings();
       document.activeElement.blur();
     }
   });

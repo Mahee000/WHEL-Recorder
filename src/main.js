@@ -696,6 +696,55 @@ ipcMain.handle('stop-recording-stream', async () => {
   }
 });
 
+ipcMain.handle('start-replay-stream', async (event, filename) => {
+  try {
+    const filePath = path.join(recordingDir, filename);
+    replayWriteStream = fs.createWriteStream(filePath);
+    logDebug(`Started replay stream to: ${filePath}`);
+    return filePath;
+  } catch (e) {
+    logDebug(`Failed to start replay stream: ${e.message}`);
+    throw e;
+  }
+});
+
+ipcMain.handle('write-replay-chunk', async (event, arrayBuffer) => {
+  try {
+    if (replayWriteStream) {
+      const buffer = Buffer.from(arrayBuffer);
+      const ok = replayWriteStream.write(buffer);
+      if (!ok) {
+        await new Promise(resolve => replayWriteStream.once('drain', resolve));
+      }
+    }
+    return true;
+  } catch (e) {
+    logDebug(`Failed to write replay chunk: ${e.message}`);
+    return false;
+  }
+});
+
+ipcMain.handle('stop-replay-stream', async () => {
+  try {
+    if (replayWriteStream) {
+      const filePath = replayWriteStream.path;
+      const filename = typeof filePath === 'string' ? path.basename(filePath) : 'Replay';
+      await new Promise((resolve, reject) => {
+        replayWriteStream.end((err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      replayWriteStream = null;
+      logDebug(`Closed replay stream.`);
+      showToastNotification('Replay Saved', `Replay saved as ${filename}`);
+    }
+    return true;
+  } catch (e) {
+    logDebug(`Failed to close replay stream: ${e.message}`);
+    return false;
+  }
+});
 ipcMain.handle('get-performance-stats', async () => {
   try {
     const cpuUsage = process.getCPUUsage();
