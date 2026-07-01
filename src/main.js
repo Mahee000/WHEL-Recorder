@@ -1,6 +1,25 @@
 const { app, BrowserWindow, ipcMain, desktopCapturer, dialog, shell, globalShortcut, Tray, Menu, Notification } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const child_process = require('child_process');
+const ffmpegStatic = require('ffmpeg-static');
+const ffmpegPath = ffmpegStatic.replace('app.asar', 'app.asar.unpacked');
+
+function finalizeVideoContainer(rawFilePath, finalFilePath) {
+  return new Promise((resolve, reject) => {
+    logDebug(`Finalizing video via FFmpeg: ${rawFilePath} -> ${finalFilePath}`);
+    const args = ['-i', rawFilePath, '-c', 'copy', '-y', finalFilePath];
+    child_process.execFile(ffmpegPath, args, (error, stdout, stderr) => {
+      if (error) {
+        logDebug(`FFmpeg finalize failed: ${error.message}\n${stderr}`);
+        resolve(false);
+      } else {
+        logDebug(`FFmpeg finalize success.`);
+        resolve(true);
+      }
+    });
+  });
+}
 const os = require('os');
 const { startAudioCapture, stopAudioCapture, getActiveWindowProcessIds, setExecutablesRoot } = require('application-loopback');
 
@@ -507,14 +526,19 @@ ipcMain.handle('stop-app-audio', async (event, pid) => {
 
 ipcMain.handle('save-recording', async (event, arrayBuffer, filename) => {
   try {
-    const filePath = path.join(recordingDir, filename);
+    const finalPath = path.join(recordingDir, filename);
+    const rawPath = path.join(recordingDir, 'raw_' + filename);
     const buffer = Buffer.from(arrayBuffer);
-    await fs.promises.writeFile(filePath, buffer);
-    logDebug(`Saved standard recording: ${filePath}`);
+    await fs.promises.writeFile(rawPath, buffer);
+    const success = await finalizeVideoContainer(rawPath, finalPath);
+    if (success) {
+      fs.unlink(rawPath, () => {});
+    }
+    logDebug(`Saved standard recording: ${finalPath}`);
     if (config.notifyRecord !== false) {
       showToastNotification('Recording Saved', `Recording saved as ${filename}`);
     }
-    return filePath;
+    return finalPath;
   } catch (e) {
     logDebug(`Failed to save recording: ${e.message}`);
     throw e;
@@ -649,10 +673,13 @@ ipcMain.handle('read-bookmarks', async (event, videoFilename) => {
 
 ipcMain.handle('start-recording-stream', async (event, filename) => {
   try {
-    const filePath = path.join(recordingDir, filename);
-    recordingWriteStream = fs.createWriteStream(filePath);
-    logDebug(`Started recording stream to: ${filePath}`);
-    return filePath;
+    const finalPath = path.join(recordingDir, filename);
+    const rawPath = path.join(recordingDir, 'raw_' + filename);
+    recordingWriteStream = fs.createWriteStream(rawPath);
+    recordingWriteStream.finalPath = finalPath;
+    recordingWriteStream.rawPath = rawPath;
+    logDebug(`Started recording stream to: ${rawPath}`);
+    return true;
   } catch (e) {
     logDebug(`Failed to start recording stream: ${e.message}`);
     throw e;
@@ -707,12 +734,14 @@ ipcMain.handle('write-recording-chunk', async (event, arrayBuffer) => {
 ipcMain.handle('stop-recording-stream', async () => {
   try {
     if (recordingWriteStream) {
-      const filePath = recordingWriteStream.path;
-      const filename = typeof filePath === 'string' ? path.basename(filePath) : 'Video';
+      const rawPath = recordingWriteStream.rawPath;
+      const finalPath = recordingWriteStream.finalPath;
+      const filename = path.basename(finalPath);
       await new Promise((resolve, reject) => {
-        recordingWriteStream.end((err) => {
-          if (err) reject(err);
-          else resolve();
+        recordingWriteStream.end(async () => {
+          const success = await finalizeVideoContainer(rawPath, finalPath);
+          if (success) fs.unlink(rawPath, () => {});
+          resolve();
         });
       });
       recordingWriteStream = null;
@@ -728,10 +757,13 @@ ipcMain.handle('stop-recording-stream', async () => {
 
 ipcMain.handle('start-replay-stream', async (event, filename) => {
   try {
-    const filePath = path.join(recordingDir, filename);
-    replayWriteStream = fs.createWriteStream(filePath);
-    logDebug(`Started replay stream to: ${filePath}`);
-    return filePath;
+    const finalPath = path.join(recordingDir, filename);
+    const rawPath = path.join(recordingDir, 'raw_' + filename);
+    replayWriteStream = fs.createWriteStream(rawPath);
+    replayWriteStream.finalPath = finalPath;
+    replayWriteStream.rawPath = rawPath;
+    logDebug(`Started replay stream to: ${rawPath}`);
+    return true;
   } catch (e) {
     logDebug(`Failed to start replay stream: ${e.message}`);
     throw e;
@@ -757,12 +789,17 @@ ipcMain.handle('write-replay-chunk', async (event, arrayBuffer) => {
 ipcMain.handle('stop-replay-stream', async () => {
   try {
     if (replayWriteStream) {
-      const filePath = replayWriteStream.path;
-      const filename = typeof filePath === 'string' ? path.basename(filePath) : 'Replay';
+      const rawPath = replayWriteStream.rawPath;
+      const finalPath = replayWriteStream.finalPath;
+      const filename = path.basename(finalPath);
       await new Promise((resolve, reject) => {
-        replayWriteStream.end((err) => {
+        replayWriteStream.end(async (err) => {
           if (err) reject(err);
-          else resolve();
+          else {
+            const success = await finalizeVideoContainer(rawPath, finalPath);
+            if (success) fs.unlink(rawPath, () => {});
+            resolve();
+          }
         });
       });
       replayWriteStream = null;
