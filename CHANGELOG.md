@@ -1,5 +1,15 @@
 # WHEL Recorder - Changelog
 
+## [1.0.2] - Performance & Reliability Update
+### Fixed
+- **Emulator & Game Audio Slowdown**: Fixed a major bug where recording an emulator or game that temporarily lagged/dropped frames would permanently slow down, pitch-drop, and delay the recorded audio. Added Hardware Rate Locking and Delay Locked Loop (DLL) drift correction to maintain perfect audio sync at a target 80ms latency.
+- **Window Reload Audio Failure**: Fixed an issue where reloading the application window would leave native audio loopbacks running in the background, breaking audio completely on subsequent attempts.
+- **Canvas Aspect Ratio Distortion**: Re-wrote "Fit to Screen" and "Stretch to Canvas" mathematics to use native canvas coordinate space, eliminating stretching and letterboxing distortion caused by viewport resizing.
+- **Audio Pops & Clicks**: Optimized the internal PCM AudioWorklet processor by completely removing run-time memory allocations and garbage collection overhead, replacing it with a zero-allocation circular Float32 ring buffer.
+- **File Stream Handles Leak**: Resolved an issue where starting consecutive recordings would overwrite file streams without closing the previous ones.
+- **System Tray Native Crash**: Added a safety check to gracefully skip system tray creation if the tray icon image is missing, preventing a fatal crash.
+- **Process Priority & Config Corruption**: Fixed process priority API calls for wider Node.js compatibility and added a self-healing mechanism that safely writes defaults to disk if `config.json` becomes corrupted.
+
 ## [1.0.1] - Initial Release Preparation
 ### Added
 - **Global Hotkeys**: Custom global shortcut registration for Start/Stop Recording (default: F9), Pause/Resume (default: Shift+F9), Save Replay (default: F8), and Start/Stop Replay Buffer (default: Shift+F8).
