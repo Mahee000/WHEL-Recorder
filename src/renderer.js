@@ -1659,21 +1659,22 @@ async function startReplayBuffer() {
         if (replayChunkIndex === 0) {
           replayHeader = arrayBuffer;
         } else {
-          replayQueue.push(arrayBuffer);
+          replayQueue.push({ buffer: arrayBuffer, timestamp: Date.now() });
           
           // Time Length Duration Limit enforcement (seconds)
-          const limitSeconds = parseInt(config.replayLength);
-          while (replayQueue.length > limitSeconds) {
+          const limitMs = parseInt(config.replayLength) * 1000;
+          const now = Date.now();
+          while (replayQueue.length > 0 && now - replayQueue[0].timestamp > limitMs) {
             replayQueue.shift();
           }
 
           // OBS-style RAM Memory Limit enforcement
           const maxRamBytes = parseInt(config.replayRam) * 1024 * 1024;
-          let currentRamBytes = replayQueue.reduce((acc, chunk) => acc + chunk.byteLength, 0);
+          let currentRamBytes = replayQueue.reduce((acc, chunk) => acc + chunk.buffer.byteLength, 0);
           
           while (currentRamBytes > maxRamBytes && replayQueue.length > 0) {
             const removed = replayQueue.shift();
-            currentRamBytes -= removed.byteLength;
+            currentRamBytes -= removed.buffer.byteLength;
           }
         }
         replayChunkIndex++;
@@ -1766,7 +1767,7 @@ async function saveReplayBuffer() {
   const fileExt = config.format || 'webm';
   const filename = `replay_${timestamp}.${fileExt}`;
   
-  const chunksToSave = [replayHeader, ...replayQueue];
+  const chunksToSave = [replayHeader, ...replayQueue.map(q => q.buffer)];
   
   try {
     await window.electronAPI.startReplayStream(filename);
