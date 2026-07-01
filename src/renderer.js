@@ -456,6 +456,12 @@ async function loadLocalConfig() {
     window.electronAPI.registerHotkey('save-replay', config.hotkeyReplay);
     window.electronAPI.registerHotkey('toggle-record', config.hotkeyRecord);
   }
+  
+  // Graceful migration for legacy config (converting 0-100 to 0.0-1.0)
+  if (config.micVolume > 1.0) config.micVolume = Math.min(1.0, Math.max(0, config.micVolume / 100));
+  if (config.systemVolume > 1.0) config.systemVolume = Math.min(1.0, Math.max(0, config.systemVolume / 100));
+  if (config.micVolume < 0) config.micVolume = 0;
+  if (config.systemVolume < 0) config.systemVolume = 0;
 }
 
 function getDefaults() {
