@@ -524,7 +524,15 @@ function saveLocalConfig() {
 
 function syncSettingsUI() {
   // Output
-  if (inputSavePath) inputSavePath.value = config.recordingDir || '';
+  if (inputSavePath) {
+    if (config.recordingDir) {
+      inputSavePath.value = config.recordingDir;
+    } else if (window.electronAPI) {
+      window.electronAPI.getVideosPath().then(path => {
+        inputSavePath.value = path;
+      });
+    }
+  }
   if (selectFormat) selectFormat.value = config.format;
   if (selectEncoder) selectEncoder.value = config.encoder;
   if (selectRateControl) selectRateControl.value = config.rateControl;
