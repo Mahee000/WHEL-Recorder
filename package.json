@@ -1,7 +1,7 @@
 {
   "name": "whel-recorder",
   "productName": "WHEL Recorder",
-  "version": "1.0.2",
+  "version": "1.0.1",
   "description": "Premium gaming screen recorder and replay buffer software with process loopback audio",
   "main": "src/main.js",
   "scripts": {

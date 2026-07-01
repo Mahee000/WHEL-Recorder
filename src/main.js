@@ -545,6 +545,10 @@ ipcMain.handle('get-gallery-files', async () => {
   }
 });
 
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
 ipcMain.handle('open-gallery-folder', async () => {
   try {
     updateRecordingDir();

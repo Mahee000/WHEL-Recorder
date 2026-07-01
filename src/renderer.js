@@ -370,6 +370,13 @@ async function initApp() {
   loadGallery();
   loadMicrophones();
   
+  if (window.electronAPI) {
+    window.electronAPI.getAppVersion().then(v => {
+      const el = document.getElementById('app-version-display');
+      if (el) el.innerText = 'Version ' + v;
+    });
+  }
+  
   // 8. Auto start replay buffer
   if (config.autoReplay) {
     setTimeout(() => {
