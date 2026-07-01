@@ -43,6 +43,432 @@
   --shadow-card: none;
 }
 
+
+/* Theme: Classic Obsidian */
+body.theme-classic-obsidian {
+  --bg-deep: rgba(18, 18, 20, 0.85);
+  --bg-main: rgba(30, 30, 35, 0.9);
+  --bg-panel: rgba(35, 35, 40, 0.95);
+  --bg-panel-solid: #222225;
+  --bg-active: rgba(60, 60, 68, 0.95);
+  --bg-hover: rgba(50, 50, 56, 0.9);
+  
+  --border-light: rgba(255, 255, 255, 0.08);
+  --border-glow: #50fa7b;
+  --border-glow-emerald: #50fa7b;
+
+  --text-primary: #f8f8f2;
+  --text-secondary: #caa9fa;
+  --text-muted: #8be9fd;
+
+  --color-cyan: #50fa7b;
+  --color-blue: #8be9fd;
+  --color-emerald: #50fa7b;
+  
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 2px;
+  --border-radius-md: 2px;
+  --border-radius-sm: 2px;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --backdrop-blur: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/classic_obsidian_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #0f0f11;
+}
+
+/* Theme: Sakura Anime */
+body.theme-sakura-anime {
+  --bg-deep: rgba(45, 25, 40, 0.85);
+  --bg-main: rgba(60, 35, 55, 0.9);
+  --bg-panel: rgba(60, 35, 55, 0.95);
+  --bg-panel-solid: #3a243b;
+  --bg-active: rgba(85, 45, 80, 0.95);
+  --bg-hover: rgba(75, 40, 70, 0.9);
+  
+  --border-light: rgba(255, 182, 193, 0.3);
+  --border-glow: #ff69b4;
+  --border-glow-emerald: #ff69b4;
+
+  --text-primary: #ffe6f0;
+  --text-secondary: #ffb6c1;
+  --text-muted: #d87093;
+
+  --color-cyan: #ff69b4;
+  --color-blue: #ff69b4;
+  --color-emerald: #ff1493;
+  
+  --grad-cyan: #ff69b4;
+  --grad-emerald: #ff1493;
+  --grad-purple: #da70d6;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 16px;
+  --border-radius-md: 10px;
+  --border-radius-sm: 6px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/sakura_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #1a0f18;
+}
+
+/* Theme: Midnight Cyberpunk */
+body.theme-cyberpunk {
+  --bg-deep: rgba(12, 15, 29, 0.85);
+  --bg-main: rgba(18, 24, 41, 0.9);
+  --bg-panel: rgba(22, 31, 56, 0.95);
+  --bg-panel-solid: #161f38;
+  --bg-active: rgba(32, 45, 82, 0.95);
+  --bg-hover: rgba(27, 38, 68, 0.9);
+  
+  --border-light: rgba(0, 255, 255, 0.15);
+  --border-glow: #ff0055;
+  --border-glow-emerald: #00ffff;
+
+  --text-primary: #00ffff;
+  --text-secondary: #ff0055;
+  --text-muted: #7000ff;
+
+  --color-cyan: #ff0055;
+  --color-blue: #00ffff;
+  --color-emerald: #ffff00;
+  
+  --grad-cyan: #ff0055;
+  --grad-emerald: #00ffff;
+  --grad-purple: #7000ff;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 0px;
+  --border-radius-md: 0px;
+  --border-radius-sm: 0px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/cyberpunk_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #060810;
+}
+
+/* Theme: Forest Moss */
+body.theme-forest {
+  --bg-deep: rgba(18, 27, 21, 0.85);
+  --bg-main: rgba(27, 38, 30, 0.9);
+  --bg-panel: rgba(34, 49, 38, 0.95);
+  --bg-panel-solid: #223126;
+  --bg-active: rgba(46, 67, 52, 0.95);
+  --bg-hover: rgba(39, 56, 44, 0.9);
+  
+  --border-light: rgba(78, 140, 97, 0.2);
+  --border-glow: #4e8c61;
+  --border-glow-emerald: #8bc34a;
+
+  --text-primary: #e2f0e6;
+  --text-secondary: #a8c3b0;
+  --text-muted: #688570;
+
+  --color-cyan: #4e8c61;
+  --color-blue: #8bc34a;
+  --color-emerald: #4caf50;
+  
+  --grad-cyan: #4e8c61;
+  --grad-emerald: #8bc34a;
+  --grad-purple: #2e7d32;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 8px;
+  --border-radius-md: 6px;
+  --border-radius-sm: 3px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/forest_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #0b110e;
+}
+
+/* Theme: Deep Ocean */
+body.theme-ocean {
+  --bg-deep: rgba(8, 16, 29, 0.85);
+  --bg-main: rgba(14, 26, 47, 0.9);
+  --bg-panel: rgba(21, 38, 67, 0.95);
+  --bg-panel-solid: #152643;
+  --bg-active: rgba(32, 58, 101, 0.95);
+  --bg-hover: rgba(25, 47, 82, 0.9);
+  
+  --border-light: rgba(0, 170, 255, 0.15);
+  --border-glow: #00aaff;
+  --border-glow-emerald: #00aaff;
+
+  --text-primary: #e0f2fe;
+  --text-secondary: #7dd3fc;
+  --text-muted: #38bdf8;
+
+  --color-cyan: #00aaff;
+  --color-blue: #0284c7;
+  --color-emerald: #0ea5e9;
+  
+  --grad-cyan: #00aaff;
+  --grad-emerald: #0ea5e9;
+  --grad-purple: #0284c7;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 24px;
+  --border-radius-md: 12px;
+  --border-radius-sm: 6px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/ocean_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #04080e;
+}
+
+/* Theme: Arctic Frost */
+body.theme-arctic {
+  --bg-deep: rgba(15, 23, 42, 0.85);
+  --bg-main: rgba(30, 41, 59, 0.9);
+  --bg-panel: rgba(51, 65, 85, 0.95);
+  --bg-panel-solid: #334155;
+  --bg-active: rgba(71, 85, 105, 0.95);
+  --bg-hover: rgba(59, 75, 97, 0.9);
+  
+  --border-light: rgba(226, 232, 240, 0.15);
+  --border-glow: #38bdf8;
+  --border-glow-emerald: #e2e8f0;
+
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+
+  --color-cyan: #e2e8f0;
+  --color-blue: #38bdf8;
+  --color-emerald: #bae6fd;
+  
+  --grad-cyan: #e2e8f0;
+  --grad-emerald: #38bdf8;
+  --grad-purple: #94a3b8;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 4px;
+  --border-radius-md: 3px;
+  --border-radius-sm: 2px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/arctic_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #070b14;
+}
+
+/* Theme: Crimson Blood */
+body.theme-crimson {
+  --bg-deep: rgba(18, 8, 8, 0.85);
+  --bg-main: rgba(28, 13, 13, 0.9);
+  --bg-panel: rgba(40, 19, 19, 0.95);
+  --bg-panel-solid: #281313;
+  --bg-active: rgba(62, 30, 30, 0.95);
+  --bg-hover: rgba(51, 25, 25, 0.9);
+  
+  --border-light: rgba(255, 51, 51, 0.15);
+  --border-glow: #ff3333;
+  --border-glow-emerald: #ff3333;
+
+  --text-primary: #ffebeb;
+  --text-secondary: #ffb3b3;
+  --text-muted: #ff8080;
+
+  --color-cyan: #ff3333;
+  --color-blue: #cc0000;
+  --color-emerald: #ff4d4d;
+  
+  --grad-cyan: #ff3333;
+  --grad-emerald: #cc0000;
+  --grad-purple: #990000;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 0px;
+  --border-radius-md: 2px;
+  --border-radius-sm: 0px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/crimson_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #0b0404;
+}
+
+/* Theme: Solar Flare */
+body.theme-solar {
+  --bg-deep: rgba(24, 21, 18, 0.85);
+  --bg-main: rgba(36, 31, 26, 0.9);
+  --bg-panel: rgba(51, 44, 37, 0.95);
+  --bg-panel-solid: #332c25;
+  --bg-active: rgba(71, 62, 52, 0.95);
+  --bg-hover: rgba(60, 52, 44, 0.9);
+  
+  --border-light: rgba(255, 170, 0, 0.15);
+  --border-glow: #ffaa00;
+  --border-glow-emerald: #ffaa00;
+
+  --text-primary: #fff6e0;
+  --text-secondary: #ffd27f;
+  --text-muted: #ffa64d;
+
+  --color-cyan: #ffaa00;
+  --color-blue: #ff5500;
+  --color-emerald: #ffcc00;
+  
+  --grad-cyan: #ffaa00;
+  --grad-emerald: #ff5500;
+  --grad-purple: #cc6600;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 10px;
+  --border-radius-md: 6px;
+  --border-radius-sm: 4px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/solar_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #0f0d0b;
+}
+
+/* Theme: Hacker Terminal */
+body.theme-hacker {
+  --bg-deep: rgba(5, 5, 5, 0.85);
+  --bg-main: rgba(12, 12, 12, 0.9);
+  --bg-panel: rgba(18, 18, 18, 0.95);
+  --bg-panel-solid: #121212;
+  --bg-active: rgba(29, 29, 29, 0.95);
+  --bg-hover: rgba(23, 23, 23, 0.9);
+  
+  --border-light: rgba(0, 255, 0, 0.2);
+  --border-glow: #00ff00;
+  --border-glow-emerald: #00ff00;
+
+  --text-primary: #00ff00;
+  --text-secondary: #00cc00;
+  --text-muted: #008800;
+
+  --color-cyan: #00ff00;
+  --color-blue: #00aa00;
+  --color-emerald: #00ff66;
+  
+  --grad-cyan: #00ff00;
+  --grad-emerald: #00cc00;
+  --grad-purple: #005500;
+
+  /* Layout overrides */
+  --font-family-global: 'JetBrains Mono', Consolas, monospace;
+  --border-radius-lg: 0px;
+  --border-radius-md: 0px;
+  --border-radius-sm: 0px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 2px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/hacker_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #020202;
+}
+
+/* Theme: Purple Nebula */
+body.theme-purple-nebula {
+  --bg-deep: rgba(12, 6, 20, 0.85);
+  --bg-main: rgba(22, 12, 36, 0.9);
+  --bg-panel: rgba(34, 18, 54, 0.95);
+  --bg-panel-solid: #221236;
+  --bg-active: rgba(50, 27, 79, 0.95);
+  --bg-hover: rgba(41, 22, 66, 0.9);
+  
+  --border-light: rgba(189, 147, 249, 0.15);
+  --border-glow: #bd93f9;
+  --border-glow-emerald: #bd93f9;
+
+  --text-primary: #f8f8f2;
+  --text-secondary: #caa9fa;
+  --text-muted: #8be9fd;
+
+  --color-cyan: #bd93f9;
+  --color-blue: #8be9fd;
+  --color-emerald: #50fa7b;
+  
+  --grad-cyan: #bd93f9;
+  --grad-emerald: #8be9fd;
+  --grad-purple: #6272a4;
+
+  /* Layout overrides */
+  --font-family-global: var(--font-sans);
+  --border-radius-lg: 12px;
+  --border-radius-md: 8px;
+  --border-radius-sm: 4px;
+  --backdrop-blur: none;
+  --box-shadow-panel: none;
+  --box-shadow-button: none;
+  --border-width-dock: 1px;
+  --border-style-dock: solid;
+
+  background-image: url('assets/purple_nebula_bg.png');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #07030b;
+}
 /* Global Reset & Base Setup */
 * {
   margin: 0;
@@ -200,7 +626,7 @@ body {
   gap: 8px;
   font-size: 11px;
   color: var(--text-secondary);
-  margin-left: auto;
+  margin-left: 24px;
   margin-right: 16px;
   -webkit-app-region: no-drag;
 }
@@ -744,6 +1170,11 @@ kbd {
   font-size: 12px;
   color: var(--text-secondary);
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  padding-right: 8px;
 }
 
 .meter-controls {
@@ -1463,11 +1894,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
 /* ==================== SETTINGS SUB-TABS ==================== */
 .settings-subtabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   margin: 20px 0 24px 0;
   border-bottom: 1px solid var(--border-light);
   padding-bottom: 0;
-  overflow-x: auto;
 }
 
 .settings-subtab {
@@ -1496,11 +1927,13 @@ input[type="range"]::-webkit-slider-thumb:hover {
 
 .settings-subpane {
   display: none;
-
 }
 
 .settings-subpane.active {
   display: block;
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 20px;
 }
 
 /* ==================== INFO CARD (Replay Buffer Stats) ==================== */
@@ -1603,8 +2036,11 @@ input[type="range"]::-webkit-slider-thumb:hover {
 }
 
 /* ==================== SETTINGS TAB SCROLLABLE ==================== */
-#tab-settings {
-  overflow-y: auto;
+#tab-settings.active {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
 #tab-settings h2 {

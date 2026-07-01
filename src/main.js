@@ -26,6 +26,7 @@ let isQuitting = false;
 let config = {};
 let activeAudioPids = new Set();
 let recordingWriteStream = null;
+let replayWriteStream = null;
 
 // Enforce single instance lock
 const gotTheLock = app.requestSingleInstanceLock();
@@ -44,6 +45,31 @@ if (!gotTheLock) {
     }
   });
 }
+
+
+const scenePath = path.join(app.getPath('userData'), 'whel-scene.json');
+
+ipcMain.handle('save-scene', async (event, sceneData) => {
+  try {
+    fs.writeFileSync(scenePath, JSON.stringify(sceneData, null, 2), 'utf8');
+    return true;
+  } catch (e) {
+    logDebug(`Failed to save scene: ${e.message}`);
+    return false;
+  }
+});
+
+ipcMain.handle('load-scene', async (event) => {
+  try {
+    if (fs.existsSync(scenePath)) {
+      const data = fs.readFileSync(scenePath, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    logDebug(`Failed to load scene: ${e.message}`);
+  }
+  return null;
+});
 
 // Paths
 const recordingDir = path.join(app.getPath('videos'), 'WHEL Recorder');
@@ -108,6 +134,10 @@ function loadConfig() {
     // Audio
     micEnabled: false,
     micDeviceId: 'default',
+    micNoiseSuppression: false,
+    micEchoCancellation: false,
+    micAGC: false,
+    micNoiseGate: false,
     micVolume: 100,
     systemVolume: 100,
     isolatedAudio: false,
@@ -120,6 +150,7 @@ function loadConfig() {
     replayNotify: true,
     replaySound: true,
     // General
+    appTheme: 'classic-obsidian',
     minimizeToTray: true,
     startMinimized: false,
     startWithWindows: false,
@@ -420,14 +451,19 @@ ipcMain.handle('start-app-audio', async (event, pid) => {
       return true;
     }
 
+    const { MessageChannelMain } = require('electron');
+    const { port1, port2 } = new MessageChannelMain();
+
     logDebug(`Starting audio capture for PID: ${pidInt}`);
     startAudioCapture(pidInt, {
       onData: (chunk) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send(`audio-data-${pidInt}`, chunk);
-        }
+        port1.postMessage(chunk);
       }
     });
+
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.postMessage(`audio-port-${pidInt}`, null, [port2]);
+    }
 
     activeAudioPids.add(pidInt);
     return true;
@@ -466,22 +502,6 @@ ipcMain.handle('save-recording', async (event, arrayBuffer, filename) => {
     return filePath;
   } catch (e) {
     logDebug(`Failed to save recording: ${e.message}`);
-    throw e;
-  }
-});
-
-ipcMain.handle('save-replay', async (event, arrayBuffer, filename) => {
-  try {
-    const filePath = path.join(recordingDir, filename);
-    const buffer = Buffer.from(arrayBuffer);
-    await fs.promises.writeFile(filePath, buffer);
-    logDebug(`Saved replay clip: ${filePath}`);
-    if (config.replayNotify !== false) {
-      showToastNotification('Replay Captured!', `Saved clip: ${filename}`);
-    }
-    return filePath;
-  } catch (e) {
-    logDebug(`Failed to save replay clip: ${e.message}`);
     throw e;
   }
 });
@@ -607,6 +627,35 @@ ipcMain.handle('start-recording-stream', async (event, filename) => {
     logDebug(`Failed to start recording stream: ${e.message}`);
     throw e;
   }
+});
+
+// Receive the recording MessagePort from the renderer and pipe chunks to the write stream
+ipcMain.on('setup-recording-port', (event) => {
+  const port = event.ports[0];
+  if (!port) {
+    logDebug('setup-recording-port called but no port was provided.');
+    return;
+  }
+  port.on('message', (messageEvent) => {
+    try {
+      if (recordingWriteStream && !recordingWriteStream.destroyed) {
+        const data = messageEvent.data;
+        const buffer = Buffer.from(data);
+        logDebug(`Received chunk. Type: ${typeof data}, IsBuffer: ${Buffer.isBuffer(data)}, ByteLength: ${data.byteLength}, BufferLength: ${buffer.length}`);
+        
+        const ok = recordingWriteStream.write(buffer);
+        if (!ok) {
+          recordingWriteStream.once('drain', () => {});
+        }
+      } else {
+        logDebug('Received chunk but recordingWriteStream is null or destroyed.');
+      }
+    } catch (e) {
+      logDebug(`Error in port.on('message'): ${e.message}`);
+    }
+  });
+  port.start();
+  logDebug('Recording MessagePort connected and listening for chunks.');
 });
 
 ipcMain.handle('write-recording-chunk', async (event, arrayBuffer) => {

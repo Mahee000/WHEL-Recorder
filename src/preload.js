@@ -9,9 +9,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startAppAudio: (pid) => ipcRenderer.invoke('start-app-audio', pid),
   stopAppAudio: (pid) => ipcRenderer.invoke('stop-app-audio', pid),
   onAppAudioData: (pid, callback) => {
-    const listener = (event, chunk) => callback(chunk);
-    ipcRenderer.on(`audio-data-${pid}`, listener);
-    return () => ipcRenderer.removeListener(`audio-data-${pid}`, listener);
+    let audioPort = null;
+    const listener = (event) => {
+      audioPort = event.ports[0];
+      audioPort.onmessage = (msgEvent) => {
+        callback(msgEvent.data);
+      };
+      audioPort.start();
+    };
+    ipcRenderer.once(`audio-port-${pid}`, listener);
+    return () => {
+      if (audioPort) {
+        audioPort.close();
+      }
+    };
+  },
+
+  setupRecordingPort: (filename) => {
+    const { port1, port2 } = new MessageChannel();
+    ipcRenderer.postMessage('setup-recording-port', filename, [port1]);
+    return port2;
   },
 
   // File Management
@@ -19,7 +36,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startRecordingStream: (filename) => ipcRenderer.invoke('start-recording-stream', filename),
   writeRecordingChunk: (arrayBuffer) => ipcRenderer.invoke('write-recording-chunk', arrayBuffer),
   stopRecordingStream: () => ipcRenderer.invoke('stop-recording-stream'),
-  saveReplay: (arrayBuffer, filename) => ipcRenderer.invoke('save-replay', arrayBuffer, filename),
+  startReplayStream: (filename) => ipcRenderer.invoke('start-replay-stream', filename),
+  writeReplayChunk: (arrayBuffer) => ipcRenderer.invoke('write-replay-chunk', arrayBuffer),
+  stopReplayStream: () => ipcRenderer.invoke('stop-replay-stream'),
   saveBookmarks: (filename, content) => ipcRenderer.invoke('save-bookmarks', filename, content),
   readBookmarks: (videoFilename) => ipcRenderer.invoke('read-bookmarks', videoFilename),
   getGalleryFiles: () => ipcRenderer.invoke('get-gallery-files'),
@@ -38,6 +57,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Configuration
   getConfig: () => ipcRenderer.invoke('get-config'),
   updateConfig: (newConfig) => ipcRenderer.invoke('update-config', newConfig),
+  saveScene: (sceneData) => ipcRenderer.invoke('save-scene', sceneData),
+  loadScene: () => ipcRenderer.invoke('load-scene'),
 
   // Window & System
   windowMinimize: () => ipcRenderer.send('window-minimize'),

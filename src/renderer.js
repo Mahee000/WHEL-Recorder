@@ -14,6 +14,7 @@ let systemMuted = false;
 let audioCtx = null;
 let audioDestNode = null;
 let micGainNode = null;
+let micGateNode = null;
 let micAnalyser = null;
 let appAudioMaps = new Map(); // pid -> { pcmNode, gainNode, analyser, unsubListener, label, slider, meterBar }
 let screenAudioMaps = new Map(); // id -> { sourceNode, gainNode, analyser, uiContainer, meterBar }
@@ -31,12 +32,15 @@ let recordCanvas = null;
 let recordCtx = null;
 let currentBookmarks = [];
 let recordingStartTime = 0;
+let totalPausedTime = 0;
+let pauseStartTime = 0;
 
 let replayActive = false;
 let replayRecorder = null;
 let replayHeader = null;
 let replayQueue = [];
 let replayChunkIndex = 0;
+let isSavingReplay = false;
 
 // UI State
 let activeTab = 'dashboard';
@@ -120,6 +124,10 @@ const selectRotation = document.getElementById('select-rotation');
 const checkboxMicEnabled = document.getElementById('checkbox-mic-enabled');
 const micDeviceRow = document.getElementById('mic-device-row');
 const selectMicDevice = document.getElementById('select-mic-device');
+const checkboxMicNoiseSuppression = document.getElementById('checkbox-mic-noise-suppression');
+const checkboxMicEchoCancellation = document.getElementById('checkbox-mic-echo-cancellation');
+const checkboxMicAgc = document.getElementById('checkbox-mic-agc');
+const checkboxMicNoiseGate = document.getElementById('checkbox-mic-noise-gate');
 const selectSampleRate = document.getElementById('select-sample-rate');
 const selectAudioChannels = document.getElementById('select-audio-channels');
 const checkboxSeparateTracks = document.getElementById('checkbox-separate-tracks');
@@ -153,6 +161,7 @@ const inputHotkeyBookmark = document.getElementById('input-hotkey-bookmark');
 const btnRecordHotkeyBookmark = document.getElementById('btn-record-hotkey-bookmark');
 
 // Settings Elements - General
+const selectAppTheme = document.getElementById('select-app-theme');
 const checkboxMinimizeTray = document.getElementById('checkbox-minimize-tray');
 const checkboxStartMinimized = document.getElementById('checkbox-start-minimized');
 const checkboxStartWithWindows = document.getElementById('checkbox-start-with-windows');
@@ -248,7 +257,76 @@ function formatTime(ms) {
 // -------------------------------------------------------------------------
 // INITIALIZATION
 // -------------------------------------------------------------------------
+
+let saveSceneTimeout = null;
+function saveSceneState() {
+  if (saveSceneTimeout) clearTimeout(saveSceneTimeout);
+  saveSceneTimeout = setTimeout(() => {
+    const serializedSources = addedSources.map(s => ({
+      id: s.id,
+      name: s.name,
+      type: s.type,
+      x: s.x,
+      y: s.y,
+      scale: s.scale,
+      scaleX: s.scaleX,
+      scaleY: s.scaleY,
+      rotation: s.rotation,
+      flipH: s.flipH,
+      flipV: s.flipV,
+      visible: s.visible
+    }));
+    window.electronAPI.saveScene({
+      sources: serializedSources,
+      activeTransform: activeTransform
+    });
+  }, 1000);
+}
+
+async function loadSceneState() {
+  try {
+    const scene = await window.electronAPI.loadScene();
+    if (scene) {
+      if (scene.activeTransform) {
+        Object.assign(activeTransform, scene.activeTransform);
+      }
+      if (scene.sources && Array.isArray(scene.sources)) {
+        await Promise.all(scene.sources.map(async (s) => {
+          try {
+            await addSourceToScene(s.id, s.name, s.type);
+            
+            // After adding, locate it in addedSources and apply transforms
+            const newlyAdded = addedSources.find(src => src.id === s.id);
+            if (newlyAdded) {
+              newlyAdded.x = s.x || 0;
+              newlyAdded.y = s.y || 0;
+              newlyAdded.scale = s.scale !== undefined ? s.scale : 1.0;
+              newlyAdded.scaleX = s.scaleX !== undefined ? s.scaleX : 1.0;
+              newlyAdded.scaleY = s.scaleY !== undefined ? s.scaleY : 1.0;
+              newlyAdded.rotation = s.rotation || 0;
+              newlyAdded.flipH = s.flipH || false;
+              newlyAdded.flipV = s.flipV || false;
+              newlyAdded.visible = s.visible !== undefined ? s.visible : true;
+            }
+          } catch (err) {
+            console.warn('Failed to restore source', s.id, err);
+          }
+        }));
+        renderSourcesList();
+        applyCanvasTransform();
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load scene state', err);
+  }
+}
+
+// Hook saveSceneState to events
+window.addEventListener('mouseup', saveSceneState);
+
 async function initApp() {
+  loadSceneState();
+
   debugLog('Initializing application...');
   
   compositeCanvas = document.getElementById('composite-canvas');
@@ -391,6 +469,10 @@ function getDefaults() {
     // Audio
     micEnabled: false,
     micDeviceId: 'default',
+    micNoiseSuppression: false,
+    micEchoCancellation: false,
+    micAGC: false,
+    micNoiseGate: false,
     sampleRate: 48000,
     audioChannels: 'stereo',
     separateTracks: false,
@@ -458,9 +540,18 @@ function syncSettingsUI() {
   if (selectRotation) selectRotation.value = config.rotation;
 
   // Audio
-  checkboxMicEnabled.checked = config.micEnabled;
-  micDeviceRow.style.display = config.micEnabled ? 'block' : 'none';
-  selectMicDevice.value = config.micDeviceId;
+  if (checkboxMicEnabled) {
+    checkboxMicEnabled.checked = config.micEnabled;
+    const micRow = document.getElementById('mic-device-row');
+    if (micRow) micRow.style.display = config.micEnabled ? 'flex' : 'none';
+  }
+  if (selectMicDevice) selectMicDevice.value = config.micDeviceId;
+  
+  if (checkboxMicNoiseSuppression) checkboxMicNoiseSuppression.checked = !!config.micNoiseSuppression;
+  if (checkboxMicEchoCancellation) checkboxMicEchoCancellation.checked = !!config.micEchoCancellation;
+  if (checkboxMicAgc) checkboxMicAgc.checked = !!config.micAGC;
+  if (checkboxMicNoiseGate) checkboxMicNoiseGate.checked = !!config.micNoiseGate;
+
   if (selectSampleRate) selectSampleRate.value = config.sampleRate;
   if (selectAudioChannels) selectAudioChannels.value = config.audioChannels;
   if (checkboxSeparateTracks) checkboxSeparateTracks.checked = config.separateTracks;
@@ -485,12 +576,14 @@ function syncSettingsUI() {
   hintRecord.innerText = config.hotkeyRecord;
 
   // General
+  if (selectAppTheme) selectAppTheme.value = config.appTheme || 'classic-obsidian';
   checkboxMinimizeTray.checked = config.minimizeToTray;
   if (checkboxStartMinimized) checkboxStartMinimized.checked = config.startMinimized;
   if (checkboxStartWithWindows) checkboxStartWithWindows.checked = config.startWithWindows;
   if (selectProcessPriority) selectProcessPriority.value = config.processPriority;
   if (checkboxNotifyRecord) checkboxNotifyRecord.checked = config.notifyRecord;
   if (checkboxNotifyReplay) checkboxNotifyReplay.checked = config.notifyReplay;
+  applyThemeToUI(config.appTheme);
 
   updateRateControlVisibility();
   updateFpsTypeVisibility();
@@ -600,7 +693,7 @@ async function addSourceToScene(id, name, type) {
   }
   
   if (audioCtx && audioCtx.state === 'suspended') {
-    await audioCtx.resume();
+    audioCtx.resume().catch(e => {});
   }
 
   let pid = null;
@@ -646,7 +739,7 @@ async function addSourceToScene(id, name, type) {
     stream = await navigator.mediaDevices.getUserMedia(constraints);
   } catch (err) {
     debugLog(`Failed to capture source stream: ${err.message}`);
-    alert(`Failed to capture source: ${err.message}`);
+    window.electronAPI.showNotification('Source Missing', `Could not capture source. It may be closed or minimized.`);
     return;
   }
 
@@ -788,6 +881,7 @@ function removeSourceFromScene(index) {
 }
 
 function renderSourcesList() {
+  saveSceneState();
   if (addedSources.length === 0) {
     sourcesListContainer.innerHTML = '<div class="empty-sources">Click + to add a capture source</div>';
     return;
@@ -841,10 +935,38 @@ function renderSourcesList() {
 // -------------------------------------------------------------------------
 // AUDIO MIXING & ANALYSIS ENGINE (Per-Application)
 // -------------------------------------------------------------------------
+let workletLoaded = false;
+let audioGraphInitPromise = null;
+
 async function initGlobalAudioGraph() {
-  if (audioDestNode) return;
-  if (audioCtx.state === 'suspended') await audioCtx.resume();
-  audioDestNode = audioCtx.createMediaStreamDestination();
+  if (audioDestNode && workletLoaded) return;
+  if (!audioGraphInitPromise) {
+    audioGraphInitPromise = (async () => {
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(e => {});
+      if (!audioDestNode) audioDestNode = audioCtx.createMediaStreamDestination();
+      
+      if (!workletLoaded) {
+        try {
+          const response = await fetch('pcm-processor.js');
+          const text = await response.text();
+          const blob = new Blob([text], {type: 'application/javascript'});
+          const blobUrl = URL.createObjectURL(blob);
+          await audioCtx.audioWorklet.addModule(blobUrl);
+
+          const gateResp = await fetch('noise-gate-processor.js');
+          const gateText = await gateResp.text();
+          const gateBlob = new Blob([gateText], {type: 'application/javascript'});
+          const gateBlobUrl = URL.createObjectURL(gateBlob);
+          await audioCtx.audioWorklet.addModule(gateBlobUrl);
+
+          workletLoaded = true;
+        } catch (e) {
+          debugLog(`AudioWorklet load error: ${e.message}`);
+        }
+      }
+    })();
+  }
+  return audioGraphInitPromise;
 }
 
 async function setupAppAudioGraph(pid, name) {
@@ -853,16 +975,6 @@ async function setupAppAudioGraph(pid, name) {
   if (appAudioMaps.has(pid)) return; // Already capturing this PID
 
   try {
-    try {
-      const response = await fetch('pcm-processor.js');
-      const text = await response.text();
-      const blob = new Blob([text], {type: 'application/javascript'});
-      const blobUrl = URL.createObjectURL(blob);
-      await audioCtx.audioWorklet.addModule(blobUrl);
-    } catch (e) {
-      debugLog(`AudioWorklet load error: ${e.message}`);
-    }
-
     const pcmNode = new AudioWorkletNode(audioCtx, 'pcm-processor');
     const gainNode = audioCtx.createGain();
     const initialVolume = 1.0;
@@ -916,16 +1028,18 @@ async function setupAppAudioGraph(pid, name) {
       }
     });
 
+    appAudioObj.unsubListener = window.electronAPI.onAppAudioData(pid.toString(), (chunk) => {
+      if (pcmNode && chunk) {
+        // Slice to get the exact data range and avoid shared buffer pool pollution
+        const exactBuffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
+        pcmNode.port.postMessage(exactBuffer);
+      }
+    });
+
     const success = await window.electronAPI.startAppAudio(pid.toString());
 
-    if (success) {
-      appAudioObj.unsubListener = window.electronAPI.onAppAudioData(pid.toString(), (chunk) => {
-        if (pcmNode && chunk) {
-          // Slice to get the exact data range and avoid shared buffer pool pollution
-          const exactBuffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-          pcmNode.port.postMessage(exactBuffer);
-        }
-      });
+    if (!success) {
+      console.warn(`Failed to start app audio for PID ${pid}`);
     }
 
     appAudioMaps.set(pid, appAudioObj);
@@ -956,9 +1070,9 @@ async function setupMicAudioGraph() {
     const micConstraints = {
       audio: {
         deviceId: config.micDeviceId !== 'default' ? { exact: config.micDeviceId } : undefined,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
+        noiseSuppression: !!config.micNoiseSuppression,
+        echoCancellation: !!config.micEchoCancellation,
+        autoGainControl: !!config.micAGC
       }
     };
     
@@ -971,7 +1085,14 @@ async function setupMicAudioGraph() {
     micAnalyser = audioCtx.createAnalyser();
     micAnalyser.fftSize = 64;
 
-    micSourceNode.connect(micGainNode);
+    if (config.micNoiseGate) {
+      micGateNode = new AudioWorkletNode(audioCtx, 'noise-gate-processor');
+      micSourceNode.connect(micGateNode);
+      micGateNode.connect(micGainNode);
+    } else {
+      micSourceNode.connect(micGainNode);
+    }
+    
     micGainNode.connect(micAnalyser);
     micAnalyser.connect(audioDestNode);
     
@@ -988,7 +1109,7 @@ function createMicMixerUI() {
   const initialVolume = config.micVolume !== undefined ? config.micVolume : 1.0;
   const mixerUI = createMixerUI('Microphone / Aux', initialVolume);
   mixerUI.container.id = 'mixer-row-mic';
-  audioMixerContainer.appendChild(mixerUI.container);
+  audioMixerContainer.prepend(mixerUI.container);
   
   if (micGainNode) {
     micGainNode.gain.value = micMuted ? 0 : initialVolume;
@@ -1031,16 +1152,15 @@ function createMicMixerUI() {
 }
 
 function removeMicAudioGraph() {
-  if (micStream) {
-    micStream.getTracks().forEach(t => t.stop());
-    micStream = null;
-  }
+  if (micStream) micStream.getTracks().forEach(t => t.stop());
+  micStream = null;
   if (micGainNode) micGainNode.disconnect();
   micGainNode = null;
+  if (micGateNode) micGateNode.disconnect();
+  micGateNode = null;
+  if (micAnalyser) micAnalyser.disconnect();
   micAnalyser = null;
-  
-  const ui = document.getElementById('mixer-row-mic');
-  if (ui) ui.remove();
+  document.getElementById('mixer-row-mic')?.remove();
 }
 
 function toggleDesktopMute() {
@@ -1079,9 +1199,10 @@ function toggleDesktopMute() {
 function createMixerUI(label, defaultGain) {
   const div = document.createElement('div');
   div.className = 'meter-row';
+  const initPct = Math.round(defaultGain * 100);
   div.innerHTML = `
     <div class="meter-labels">
-      <label>${label}</label>
+      <label>${label} <span class="volume-percentage" style="font-size: 11px; color: var(--text-secondary); margin-left: 8px; font-weight: normal;">${initPct}%</span></label>
       <button class="mute-btn" title="Mute/Unmute" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;display:flex;align-items:center;padding: 2px;">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="mute-icon">
           <path d="M11 5L6 9H2v6h4l5 4V5z"></path>
@@ -1097,12 +1218,21 @@ function createMixerUI(label, defaultGain) {
       <input type="range" class="volume-slider" min="0" max="1" step="0.01" value="${defaultGain}" title="Volume">
     </div>
   `;
-  return {
+  const ret = {
     container: div,
     slider: div.querySelector('.volume-slider'),
     meterBar: div.querySelector('.meter-bar'),
     muteBtn: div.querySelector('.mute-btn')
   };
+  
+  const pctSpan = div.querySelector('.volume-percentage');
+  if (ret.slider && pctSpan) {
+    ret.slider.addEventListener('input', (e) => {
+      pctSpan.innerText = Math.round(e.target.value * 100) + '%';
+    });
+  }
+  
+  return ret;
 }
 
 // Volume Meters Render Loop
@@ -1235,7 +1365,7 @@ async function startStandardRecording() {
     return;
   }
   
-  if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(e => {});
   await initGlobalAudioGraph();
 
   // Create downscaled helper canvas if output resolution !== 'same'
@@ -1340,6 +1470,8 @@ async function startStandardRecording() {
     standardRecorder.start(1000); // Write chunks to disk every 1 second
     recordingState = 'recording';
     standardStartTime = Date.now();
+    totalPausedTime = 0;
+    pauseStartTime = 0;
     updateUIStatus();
     startTimer();
     
@@ -1365,6 +1497,7 @@ function pauseStandardRecording() {
   if (standardRecorder && recordingState === 'recording') {
     standardRecorder.pause();
     recordingState = 'paused';
+    pauseStartTime = Date.now();
     updateUIStatus();
   }
 }
@@ -1373,6 +1506,8 @@ function resumeStandardRecording() {
   if (standardRecorder && recordingState === 'paused') {
     standardRecorder.resume();
     recordingState = 'recording';
+    totalPausedTime += (Date.now() - pauseStartTime);
+    pauseStartTime = 0;
     updateUIStatus();
   }
 }
@@ -1415,7 +1550,7 @@ async function startReplayBuffer() {
     return;
   }
 
-  if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(e => {});
   await initGlobalAudioGraph();
 
   // Create downscaled helper canvas if output resolution !== 'same'
@@ -1585,7 +1720,8 @@ function addBookmark() {
 }
 
 async function saveReplayBuffer() {
-  if (!replayActive || replayQueue.length === 0 || !replayHeader) return;
+  if (isSavingReplay || !replayActive || replayQueue.length === 0 || !replayHeader) return;
+  isSavingReplay = true;
   
   debugLog('Saving replay buffer to file...');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -1593,15 +1729,22 @@ async function saveReplayBuffer() {
   const filename = `replay_${timestamp}.${fileExt}`;
   
   const chunksToSave = [replayHeader, ...replayQueue];
-  const blob = new Blob(chunksToSave, { type: (fileExt === 'mkv') ? 'video/x-matroska' : 'video/webm' });
-  const arrayBuffer = await blob.arrayBuffer();
   
   try {
-    await window.electronAPI.saveReplay(arrayBuffer, filename);
+    await window.electronAPI.startReplayStream(filename);
+    for (const chunk of chunksToSave) {
+      if (chunk && chunk.byteLength > 0) {
+        await window.electronAPI.writeReplayChunk(chunk);
+      }
+    }
+    await window.electronAPI.stopReplayStream();
+    
     playReplayCaptureSound();
     loadGallery();
   } catch (err) {
     debugLog(`Failed to save replay: ${err.message}`);
+  } finally {
+    isSavingReplay = false;
   }
 }
 
@@ -1757,6 +1900,17 @@ function setupEventListeners() {
     saveLocalConfig();
     if (config.micEnabled) { removeMicAudioGraph(); setupMicAudioGraph(); }
   });
+  
+  const handleMicFilterChange = (key) => (e) => {
+    config[key] = e.target.checked;
+    saveLocalConfig();
+    if (config.micEnabled) { removeMicAudioGraph(); setupMicAudioGraph(); }
+  };
+  
+  if (checkboxMicNoiseSuppression) checkboxMicNoiseSuppression.addEventListener('change', handleMicFilterChange('micNoiseSuppression'));
+  if (checkboxMicEchoCancellation) checkboxMicEchoCancellation.addEventListener('change', handleMicFilterChange('micEchoCancellation'));
+  if (checkboxMicAgc) checkboxMicAgc.addEventListener('change', handleMicFilterChange('micAGC'));
+  if (checkboxMicNoiseGate) checkboxMicNoiseGate.addEventListener('change', handleMicFilterChange('micNoiseGate'));
   if (selectSampleRate) selectSampleRate.addEventListener('change', e => { config.sampleRate = e.target.value; saveLocalConfig(); });
   if (selectAudioChannels) selectAudioChannels.addEventListener('change', e => { config.audioChannels = e.target.value; saveLocalConfig(); });
   if (checkboxSeparateTracks) checkboxSeparateTracks.addEventListener('change', e => { config.separateTracks = e.target.checked; saveLocalConfig(); });
@@ -1775,6 +1929,12 @@ function setupEventListeners() {
   if (selectProcessPriority) selectProcessPriority.addEventListener('change', e => { config.processPriority = e.target.value; saveLocalConfig(); });
   if (checkboxNotifyRecord) checkboxNotifyRecord.addEventListener('change', e => { config.notifyRecord = e.target.checked; saveLocalConfig(); });
   if (checkboxNotifyReplay) checkboxNotifyReplay.addEventListener('change', e => { config.notifyReplay = e.target.checked; saveLocalConfig(); });
+
+  if (selectAppTheme) selectAppTheme.addEventListener('change', e => {
+    config.appTheme = e.target.value;
+    saveLocalConfig();
+    applyThemeToUI(e.target.value);
+  });
 
 
   // Canvas Transform Right-Click Context Menu Logic
@@ -2494,7 +2654,7 @@ function setupCustomVideoPlayer(video, bookmarksArray) {
   video.onplay = updatePlayPauseIcon;
   video.onpause = updatePlayPauseIcon;
 
-  video.onloadedmetadata = async () => {
+  const handleLoadedMetadata = async () => {
     let duration = video.duration;
     if (!isFinite(duration) || duration === 0) {
       duration = await getRealVideoDuration(video);
@@ -2522,6 +2682,11 @@ function setupCustomVideoPlayer(video, bookmarksArray) {
       });
     }
   };
+
+  video.onloadedmetadata = handleLoadedMetadata;
+  if (video.readyState >= 1) {
+    handleLoadedMetadata();
+  }
 
   video.ontimeupdate = () => {
     if (!timelineSlider.matches(':active')) {
@@ -2770,15 +2935,6 @@ function applyCanvasTransform() {
   const resizableBox = document.getElementById('resizable-source-box');
   if (!container || !workspace || !resizableBox) return;
 
-  // Get active selected source
-  const selectedSource = addedSources.find(s => s.id === activeVideoSourceId);
-  if (!selectedSource || !selectedSource.video || !selectedSource.video.videoWidth) {
-    resizableBox.style.display = 'none';
-    return;
-  }
-
-  resizableBox.style.display = 'flex';
-
   const parentWidth = workspace.clientWidth - 40;
   const parentHeight = workspace.clientHeight - 40;
   
@@ -2791,6 +2947,9 @@ function applyCanvasTransform() {
       canvasH = parseInt(parts[1]) || 1080;
     }
   }
+
+  // Get active selected source for aspect ratio if needed
+  const selectedSource = addedSources.find(s => s.id === activeVideoSourceId);
 
   let ratio = canvasW / canvasH;
   if (activeTransform.aspectRatio && activeTransform.aspectRatio !== 'source') {
@@ -2821,6 +2980,13 @@ function applyCanvasTransform() {
   container.style.aspectRatio = ratio;
   container.style.width = `${Math.floor(targetWidth)}px`;
   container.style.height = `${Math.floor(targetHeight)}px`;
+
+  if (!selectedSource || !selectedSource.video || !selectedSource.video.videoWidth) {
+    resizableBox.style.display = 'none';
+    return;
+  }
+
+  resizableBox.style.display = 'flex';
 
   // 2. Position the resizable source box overlay relative to the container
   const vpScale = targetWidth / canvasW; // Viewport scale
@@ -3626,3 +3792,182 @@ function setupCanvasKeyboardControls() {
 
 // Run Initialization
 window.addEventListener('DOMContentLoaded', initApp);
+
+// Theme Helpers
+function getEmptySourcesMessage() {
+  const theme = config.appTheme || 'classic-obsidian';
+  if (theme === 'sakura-anime') return 'No sources yet... Add one to begin capture! (◕‿◕✿)';
+  if (theme === 'cyberpunk') return 'ALERT: NO VIDEO STREAMS ACTIVE. LOAD A INPUT SOURCE.';
+  if (theme === 'forest') return 'Silence of the woods... Add a source to capture.';
+  if (theme === 'ocean') return 'Calm waters... Add a video capture source.';
+  if (theme === 'arctic') return 'Frozen streams... Attach a capture feed.';
+  if (theme === 'crimson') return 'The altar is silent. Add a source to begin.';
+  if (theme === 'solar') return 'Black hole... Add a light source to capture.';
+  if (theme === 'hacker') return '[ERR] NO_CAPTURE_SOURCE_LOADED. PLEASE ATTACH SOURCE.';
+  if (theme === 'purple-nebula') return 'Empty vacuum... Connect a capture beacon.';
+  return 'Click + to add a capture source';
+}
+
+function getEmptyGalleryMessage() {
+  const theme = config.appTheme || 'classic-obsidian';
+  if (theme === 'sakura-anime') return 'Your gallery is empty! Record something cute or save a replay to fill it. 🌸';
+  if (theme === 'cyberpunk') return 'DATABASE_EMPTY. NO RECORDED CLIPS RETRIEVED.';
+  if (theme === 'forest') return 'No clips saved in the forest vault yet.';
+  if (theme === 'ocean') return 'No marine logs stored in the deep database.';
+  if (theme === 'arctic') return 'The archives are frozen and empty.';
+  if (theme === 'crimson') return 'No blood logs written in the chamber vault.';
+  if (theme === 'solar') return 'No light coordinates saved in the vault.';
+  if (theme === 'hacker') return '[ERR] DIRECTORY_EMPTY. ZERO WEBM/MKV LOGS FOUND.';
+  if (theme === 'purple-nebula') return 'No cosmic signals captured in the stardust files.';
+  return 'No clips or recordings captured yet. Try enabling the Replay Buffer or record your screen!';
+}
+
+function applyThemeToUI(themeName) {
+  document.body.className = '';
+  const currentTheme = themeName || 'classic-obsidian';
+  document.body.classList.add(`theme-${currentTheme}`);
+
+  // Dynamic Theme Customization Metadata
+  const themeSpecs = {
+    'classic-obsidian': {
+      title: 'WHEL RECORDER',
+      navDashboard: 'Dashboard',
+      navGallery: 'Gallery',
+      navSettings: 'Settings',
+      banner: 'Classic obsidian theme loaded. Stable dark carbon matrix.',
+      previewPlaceholder: 'Select a source to begin capture',
+      playerPlaceholder: 'Select a video from the list to preview'
+    },
+    'sakura-anime': {
+      title: '🌸 WHEL RECORDER 🌸',
+      navDashboard: '✿  Dashboard',
+      navGallery: '✿  Gallery',
+      navSettings: '✿  Settings',
+      banner: 'Sakura Anime theme active! (✿◕‿◕) Sweet cherry blossoms and soft glass curves are loaded.',
+      previewPlaceholder: 'Please choose a source to start capturing! 🌸',
+      playerPlaceholder: 'Pick a clip from the list to watch! 🌸'
+    },
+    'cyberpunk': {
+      title: '⚡ WHEL // SYSTEM_ACTIVE',
+      navDashboard: '⚡  Dashboard',
+      navGallery: '⚡  Gallery',
+      navSettings: '⚡  Settings',
+      banner: 'Cyberpunk HUD active. High-frequency neon grids and fast-refresh styling engaged.',
+      previewPlaceholder: 'SYSTEM_READY // CONNECTOR STREAMS OFFLINE. INPUT REQUIRED.',
+      playerPlaceholder: 'MEDIA_PLAYER: WAITING ON SEGMENT SELECTION.'
+    },
+    'forest': {
+      title: '🌿 WHEL RECORDER',
+      navDashboard: '🌿  Dashboard',
+      navGallery: '🌿  Gallery',
+      navSettings: '🌿  Settings',
+      banner: 'Forest Moss theme loaded. Earthy textures and soft organic curves are active.',
+      previewPlaceholder: 'Awaiting visual capture stream... 🌿',
+      playerPlaceholder: 'Select a forest chronicle from the list.'
+    },
+    'ocean': {
+      title: '🌊 WHEL RECORDER',
+      navDashboard: '🌊  Dashboard',
+      navGallery: '🌊  Gallery',
+      navSettings: '🌊  Settings',
+      banner: 'Deep Ocean theme loaded. Heavy glass refraction and oceanic ambient shadows engaged.',
+      previewPlaceholder: 'Select a stream feed to project... 🌊',
+      playerPlaceholder: 'Select a playback stream from the logs.'
+    },
+    'arctic': {
+      title: '❄️ WHEL RECORDER',
+      navDashboard: '❄️  Dashboard',
+      navGallery: '❄️  Gallery',
+      navSettings: '❄️  Settings',
+      banner: 'Arctic Frost active. Crystalline frosted glass margins and high-blur ice sheets.',
+      previewPlaceholder: 'Awaiting live stream input... ❄️',
+      playerPlaceholder: 'Select an archive segment to render.'
+    },
+    'crimson': {
+      title: '🩸 WHEL RECORDER',
+      navDashboard: '🩸  Dashboard',
+      navGallery: '🩸  Gallery',
+      navSettings: '🩸  Settings',
+      banner: 'Crimson Blood active. Dark obsidian gothic borders and intense red highlights.',
+      previewPlaceholder: 'Choose a signal feed to ignite... 🩸',
+      playerPlaceholder: 'Choose a recorded vessel to replay.'
+    },
+    'solar': {
+      title: '☀️ WHEL RECORDER',
+      navDashboard: '☀️  Dashboard',
+      navGallery: '☀️  Gallery',
+      navSettings: '☀️  Settings',
+      banner: 'Solar Flare active. Corona heat highlights and solar wind shadows engaged.',
+      previewPlaceholder: 'Select a planetary frequency feed... ☀️',
+      playerPlaceholder: 'Select a stellar log to review.'
+    },
+    'hacker': {
+      title: '> WHEL_RECORDER.EXE [v1.0.0]',
+      navDashboard: 'DASHBOARD',
+      navGallery: 'GALLERY',
+      navSettings: 'SETTINGS',
+      banner: 'HACKER_CONSOLE_ONLINE. Terminal scanlines active. Monospace font matrix override active.',
+      previewPlaceholder: '[ STATUS: WAITING FOR INPUT STREAM CONTROLLER... ]',
+      playerPlaceholder: '[ STATUS: PLAYBACK UNIT CONFIGURED. SELECT SEGMENT... ]'
+    },
+    'purple-nebula': {
+      title: '🌌 WHEL RECORDER',
+      navDashboard: '🌌  Dashboard',
+      navGallery: '🌌  Gallery',
+      navSettings: '🌌  Settings',
+      banner: 'Purple Nebula active. Cosmic floating pod shape-profile and dark stardust blur.',
+      previewPlaceholder: 'Awaiting nebula beacon stream... 🌌',
+      playerPlaceholder: 'Select a space travel log from the telemetry.'
+    }
+  };
+
+  const spec = themeSpecs[currentTheme] || themeSpecs['classic-obsidian'];
+
+  // 1. Update Titlebar logo text
+  const logoText = document.getElementById('titlebar-logo-text');
+  if (logoText) {
+    logoText.innerHTML = `${spec.title} <small style="font-size: 9px; opacity: 0.6; font-weight: normal; margin-left: 6px; color: var(--color-text-muted);">by Etherious</small>`;
+  }
+
+  // 2. Update Nav Tabs text
+  const navBtns = document.querySelectorAll('.titlebar-nav .nav-btn');
+  navBtns.forEach(btn => {
+    const tabName = btn.getAttribute('data-tab');
+    const span = btn.querySelector('span');
+    if (span) {
+      if (tabName === 'dashboard') span.innerText = spec.navDashboard;
+      if (tabName === 'gallery') span.innerText = spec.navGallery;
+      if (tabName === 'settings') span.innerText = spec.navSettings;
+    }
+  });
+
+  // 3. Update Settings Banner Card
+  const themeBanner = document.getElementById('theme-banner');
+  if (themeBanner) {
+    themeBanner.innerText = spec.banner;
+    themeBanner.style.display = 'block';
+  }
+
+  // 4. Update Empty State / Placeholders
+  const previewPlaceholderEl = document.querySelector('#preview-placeholder span');
+  if (previewPlaceholderEl) {
+    previewPlaceholderEl.innerText = spec.previewPlaceholder;
+  }
+
+  const playerPlaceholderEl = document.querySelector('#player-placeholder span');
+  if (playerPlaceholderEl) {
+    playerPlaceholderEl.innerText = spec.playerPlaceholder;
+  }
+
+  // Update empty sources/gallery in lists if currently empty
+  const emptySourcesEl = document.querySelector('#sources-list-container .empty-sources');
+  if (emptySourcesEl) {
+    emptySourcesEl.innerText = getEmptySourcesMessage();
+  }
+
+  const emptyGalleryEl = document.querySelector('#clips-list-container .empty-gallery');
+  if (emptyGalleryEl) {
+    emptyGalleryEl.innerText = getEmptyGalleryMessage();
+  }
+}
+

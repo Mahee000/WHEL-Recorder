@@ -1,13 +1,13 @@
 {
   "name": "whel-recorder",
   "productName": "WHEL Recorder",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Premium gaming screen recorder and replay buffer software with process loopback audio",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win",
-    "build": "electron-builder --win"
+    "dist": "npm version patch --no-git-tag-version && electron-builder --win",
+    "build": "npm version patch --no-git-tag-version && electron-builder --win"
   },
   "build": {
     "appId": "com.etherious.whelrecorder",
@@ -15,8 +15,18 @@
     "directories": {
       "output": "dist"
     },
+    "files": [
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "asarUnpack": [
+      "node_modules/application-loopback/**/*"
+    ],
     "win": {
-      "target": ["nsis", "portable"],
+      "target": [
+        "nsis",
+        "portable"
+      ],
       "icon": "src/assets/icon.png"
     },
     "nsis": {

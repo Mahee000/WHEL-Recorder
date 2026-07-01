@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob: file:; img-src 'self' data: file: blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; media-src 'self' blob: file:; img-src 'self' data: file: blob:;">
   <title>WHEL Recorder</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -669,6 +669,28 @@
                 <select id="select-mic-device" class="styled-select">
                   <option value="default">System Default</option>
                 </select>
+                
+                <div style="margin-top: 15px;">
+                  <label>Microphone Filters</label>
+                  <div class="setting-desc" style="margin-bottom: 8px;">Check these to apply software processing to your microphone.</div>
+                  
+                  <div class="check-container" style="margin-bottom: 5px;">
+                    <input type="checkbox" id="checkbox-mic-noise-suppression">
+                    <label for="checkbox-mic-noise-suppression">Noise Suppression (Removes background fans/static)</label>
+                  </div>
+                  <div class="check-container" style="margin-bottom: 5px;">
+                    <input type="checkbox" id="checkbox-mic-echo-cancellation">
+                    <label for="checkbox-mic-echo-cancellation">Echo Cancellation (Prevents mic from hearing speakers)</label>
+                  </div>
+                  <div class="check-container" style="margin-bottom: 5px;">
+                    <input type="checkbox" id="checkbox-mic-agc">
+                    <label for="checkbox-mic-agc">Auto Gain Control (Boosts mic volume when quiet)</label>
+                  </div>
+                  <div class="check-container" style="margin-bottom: 5px;">
+                    <input type="checkbox" id="checkbox-mic-noise-gate">
+                    <label for="checkbox-mic-noise-gate">Audio Noise Gate (Absolute silence when not speaking)</label>
+                  </div>
+                </div>
               </div>
 
               <div class="divider"></div>
@@ -873,8 +895,29 @@
         <div class="settings-subpane" id="stab-general">
           <div class="settings-grid">
             <div class="settings-column">
-              <h3>System Behavior</h3>
+              <h3>Appearance</h3>
+              <div class="setting-row">
+                <label>App Theme</label>
+                <select id="select-app-theme" class="styled-select">
+                  <option value="classic-obsidian">Classic Obsidian</option>
+                  <option value="sakura-anime">Sakura Anime</option>
+                  <option value="cyberpunk">Midnight Cyberpunk</option>
+                  <option value="forest">Forest Moss</option>
+                  <option value="ocean">Deep Ocean</option>
+                  <option value="arctic">Arctic Frost</option>
+                  <option value="crimson">Crimson Blood</option>
+                  <option value="solar">Solar Flare</option>
+                  <option value="hacker">Neon Hacker</option>
+                  <option value="purple-nebula">Purple Nebula</option>
+                </select>
+                <div class="setting-desc">Choose the aesthetic for WHEL Recorder.</div>
+              </div>
 
+              <div id="theme-banner" style="margin: 12px 0 12px 0; padding: 10px 14px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-light); border-radius: 2px; font-size: 11px; color: var(--color-cyan); line-height: 1.4; display: none;"></div>
+
+              <div class="divider"></div>
+
+              <h3>System Behavior</h3>
               <div class="setting-row check-row">
                 <div class="check-container">
                   <input type="checkbox" id="checkbox-minimize-tray" checked>
