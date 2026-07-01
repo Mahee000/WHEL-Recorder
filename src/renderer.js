@@ -41,6 +41,8 @@ let replayHeader = null;
 let replayQueue = [];
 let replayChunkIndex = 0;
 let isSavingReplay = false;
+let replayStartTime = 0;
+let activeWritePromises = [];
 
 // UI State
 let activeTab = 'dashboard';
@@ -1494,16 +1496,25 @@ async function startStandardRecording() {
     currentBookmarks = [];
 
     standardRecorder = new MediaRecorder(finalStream, options);
+    activeWritePromises = [];
     
-    standardRecorder.ondataavailable = async (e) => {
+    standardRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) {
-        const arrayBuffer = await e.data.arrayBuffer();
-        await window.electronAPI.writeRecordingChunk(arrayBuffer);
+        const promise = (async () => {
+          const arrayBuffer = await e.data.arrayBuffer();
+          await window.electronAPI.writeRecordingChunk(arrayBuffer);
+        })();
+        activeWritePromises.push(promise);
+        promise.finally(() => {
+          const idx = activeWritePromises.indexOf(promise);
+          if (idx !== -1) activeWritePromises.splice(idx, 1);
+        });
       }
     };
 
     standardRecorder.onstop = async () => {
       try {
+        await Promise.all(activeWritePromises);
         await window.electronAPI.stopRecordingStream();
         
         // Save bookmarks sidecar file if any were added
@@ -1713,6 +1724,7 @@ async function startReplayBuffer() {
     };
 
     replayRecorder.start(1000); // 1 sec timeslice
+    replayStartTime = Date.now();
     replayActive = true;
     updateUIStatus();
     
@@ -1796,7 +1808,11 @@ async function saveReplayBuffer() {
         await window.electronAPI.writeReplayChunk(chunk);
       }
     }
-    await window.electronAPI.stopReplayStream();
+    const firstChunkTimestamp = replayQueue[0].timestamp;
+    const offsetMs = firstChunkTimestamp - replayStartTime;
+    const offsetSeconds = Math.max(0, (offsetMs - 500) / 1000);
+    
+    await window.electronAPI.stopReplayStream(offsetSeconds);
     
     playReplayCaptureSound();
     loadGallery();
@@ -2035,28 +2051,30 @@ function setupEventListeners() {
 
     bindContextOption('ctx-trans-fit', () => {
       const selectedSource = addedSources.find(s => s.id === activeVideoSourceId);
-      const container = document.getElementById('video-canvas-container');
-      if (selectedSource && selectedSource.video && container) {
-        const nativeWidth = selectedSource.video.videoWidth;
-        const nativeHeight = selectedSource.video.videoHeight;
-        const ratio = nativeWidth / nativeHeight;
-        
-        let targetHeight = container.clientHeight;
-        let targetWidth = container.clientHeight * ratio;
-        if (targetWidth > container.clientWidth) {
-          targetWidth = container.clientWidth;
-          targetHeight = container.clientWidth / ratio;
-        }
+      if (selectedSource && selectedSource.video) {
+        const nativeWidth = selectedSource.video.videoWidth || 1920;
+        const nativeHeight = selectedSource.video.videoHeight || 1080;
         
         let canvasW = 1920;
+        let canvasH = 1080;
         if (config.baseResolution) {
           const parts = config.baseResolution.split('x');
-          if (parts.length === 2) canvasW = parseInt(parts[0]) || 1920;
+          if (parts.length === 2) {
+            canvasW = parseInt(parts[0]) || 1920;
+            canvasH = parseInt(parts[1]) || 1080;
+          }
         }
-        const vpScale = container.clientWidth / canvasW;
 
-        selectedSource.scaleX = targetWidth / (nativeWidth * vpScale);
-        selectedSource.scaleY = targetWidth / (nativeWidth * vpScale);
+        const ratio = nativeWidth / nativeHeight;
+        let targetWidth = canvasW;
+        let targetHeight = canvasW / ratio;
+        if (targetHeight > canvasH) {
+          targetHeight = canvasH;
+          targetWidth = canvasH * ratio;
+        }
+
+        selectedSource.scaleX = targetWidth / nativeWidth;
+        selectedSource.scaleY = targetHeight / nativeHeight;
         selectedSource.x = 0;
         selectedSource.y = 0;
         selectedSource.rotation = 0;
@@ -2069,10 +2087,9 @@ function setupEventListeners() {
 
     bindContextOption('ctx-trans-stretch', () => {
       const selectedSource = addedSources.find(s => s.id === activeVideoSourceId);
-      const container = document.getElementById('video-canvas-container');
-      if (selectedSource && selectedSource.video && container) {
-        const nativeWidth = selectedSource.video.videoWidth;
-        const nativeHeight = selectedSource.video.videoHeight;
+      if (selectedSource && selectedSource.video) {
+        const nativeWidth = selectedSource.video.videoWidth || 1920;
+        const nativeHeight = selectedSource.video.videoHeight || 1080;
         
         let canvasW = 1920;
         let canvasH = 1080;
@@ -2083,10 +2100,9 @@ function setupEventListeners() {
             canvasH = parseInt(parts[1]) || 1080;
           }
         }
-        const vpScale = container.clientWidth / canvasW;
 
-        selectedSource.scaleX = container.clientWidth / (nativeWidth * vpScale);
-        selectedSource.scaleY = container.clientHeight / (nativeHeight * vpScale);
+        selectedSource.scaleX = canvasW / nativeWidth;
+        selectedSource.scaleY = canvasH / nativeHeight;
         selectedSource.x = 0;
         selectedSource.y = 0;
         selectedSource.rotation = 0;
@@ -2274,6 +2290,75 @@ function setupHotkeyListener() {
 // -------------------------------------------------------------------------
 // GALLERY
 // -------------------------------------------------------------------------
+// Sequential duration loader queue to prevent freezing Chromium threads
+let durationQueue = [];
+let durationQueueRunning = false;
+
+function loadVideoDurationAsync(filePath) {
+  return new Promise((resolve) => {
+    const v = document.createElement('video');
+    v.src = `file:///${filePath.replace(/\\/g, '/')}`;
+    
+    const cleanup = () => {
+      v.onloadedmetadata = null;
+      v.onerror = null;
+      v.src = '';
+    };
+
+    v.onloadedmetadata = async () => {
+      let dur = v.duration;
+      if (!isFinite(dur) || dur === 0) {
+        dur = await getRealVideoDuration(v);
+      }
+      cleanup();
+      resolve(dur || 0);
+    };
+
+    v.onerror = () => {
+      cleanup();
+      resolve(0);
+    };
+    
+    setTimeout(() => {
+      cleanup();
+      resolve(0);
+    }, 3000);
+  });
+}
+
+function queueGetDuration(file, callback) {
+  const cacheKey = `dur:${file.path}:${file.sizeBytes}:${file.createdAt}`;
+  const cached = localStorage.getItem(cacheKey);
+  if (cached) {
+    callback(parseFloat(cached));
+    return;
+  }
+  
+  durationQueue.push({ file, callback });
+  triggerDurationQueue();
+}
+
+async function triggerDurationQueue() {
+  if (durationQueueRunning || durationQueue.length === 0) return;
+  durationQueueRunning = true;
+  
+  while (durationQueue.length > 0) {
+    const task = durationQueue.shift();
+    try {
+      const dur = await loadVideoDurationAsync(task.file.path);
+      if (dur && isFinite(dur) && dur > 0) {
+        const cacheKey = `dur:${task.file.path}:${task.file.sizeBytes}:${task.file.createdAt}`;
+        localStorage.setItem(cacheKey, dur);
+      }
+      task.callback(dur);
+    } catch (e) {
+      task.callback(0);
+    }
+  }
+  
+  durationQueueRunning = false;
+}
+
 async function loadGallery() {
   if (!window.electronAPI) return;
   const files = await window.electronAPI.getGalleryFiles();
@@ -2297,21 +2382,13 @@ async function loadGallery() {
         </div>
       `;
 
-      // Async load duration
-      const v = document.createElement('video');
-      v.src = `file:///${file.path.replace(/\\/g, '/')}`;
-      v.onloadedmetadata = async () => {
-        let dur = v.duration;
-        if (!isFinite(dur) || dur === 0) {
-          dur = await getRealVideoDuration(v);
-        }
+      // Async load duration via sequential queue with localStorage caching
+      queueGetDuration(file, (dur) => {
         if (dur && isFinite(dur)) {
           const durationSpan = card.querySelector('.duration-text');
           if (durationSpan) durationSpan.innerText = secondsToTimestamp(dur);
         }
-        v.src = ''; // cleanup
-      };
-      v.onerror = () => { v.src = ''; };
+      });
 
       card.addEventListener('click', () => {
         document.querySelectorAll('.clip-card').forEach(c => c.classList.remove('selected'));
@@ -2499,16 +2576,25 @@ async function exportTrimmedVideo(filePath, filename) {
     await window.electronAPI.startRecordingStream(outFilename);
 
     const mediaRecorder = new MediaRecorder(stream, options);
+    const trimWritePromises = [];
     
-    mediaRecorder.ondataavailable = async (e) => {
+    mediaRecorder.ondataavailable = (e) => {
       if (e.data && e.data.size > 0) {
-        const arrayBuffer = await e.data.arrayBuffer();
-        await window.electronAPI.writeRecordingChunk(arrayBuffer);
+        const promise = (async () => {
+          const arrayBuffer = await e.data.arrayBuffer();
+          await window.electronAPI.writeRecordingChunk(arrayBuffer);
+        })();
+        trimWritePromises.push(promise);
+        promise.finally(() => {
+          const idx = trimWritePromises.indexOf(promise);
+          if (idx !== -1) trimWritePromises.splice(idx, 1);
+        });
       }
     };
 
     mediaRecorder.onstop = async () => {
       try {
+        await Promise.all(trimWritePromises);
         await window.electronAPI.stopRecordingStream();
         trimProgressText.innerText = 'Export complete!';
         trimProgressBar.style.width = '100%';
@@ -3208,28 +3294,30 @@ function setupCanvasTransformListeners() {
   // Fit button
   btnTransFit.addEventListener('click', () => {
     const selectedSource = addedSources.find(s => s.id === activeVideoSourceId);
-    const container = document.getElementById('video-canvas-container');
-    if (selectedSource && selectedSource.video && container) {
-      const nativeWidth = selectedSource.video.videoWidth;
-      const nativeHeight = selectedSource.video.videoHeight;
-      const ratio = nativeWidth / nativeHeight;
-      
-      let targetHeight = container.clientHeight;
-      let targetWidth = container.clientHeight * ratio;
-      if (targetWidth > container.clientWidth) {
-        targetWidth = container.clientWidth;
-        targetHeight = container.clientWidth / ratio;
-      }
+    if (selectedSource && selectedSource.video) {
+      const nativeWidth = selectedSource.video.videoWidth || 1920;
+      const nativeHeight = selectedSource.video.videoHeight || 1080;
       
       let canvasW = 1920;
+      let canvasH = 1080;
       if (config.baseResolution) {
         const parts = config.baseResolution.split('x');
-        if (parts.length === 2) canvasW = parseInt(parts[0]) || 1920;
+        if (parts.length === 2) {
+          canvasW = parseInt(parts[0]) || 1920;
+          canvasH = parseInt(parts[1]) || 1080;
+        }
       }
-      const vpScale = container.clientWidth / canvasW;
 
-      selectedSource.scaleX = targetWidth / (nativeWidth * vpScale);
-      selectedSource.scaleY = targetWidth / (nativeWidth * vpScale);
+      const ratio = nativeWidth / nativeHeight;
+      let targetWidth = canvasW;
+      let targetHeight = canvasW / ratio;
+      if (targetHeight > canvasH) {
+        targetHeight = canvasH;
+        targetWidth = canvasH * ratio;
+      }
+
+      selectedSource.scaleX = targetWidth / nativeWidth;
+      selectedSource.scaleY = targetHeight / nativeHeight;
       selectedSource.x = 0;
       selectedSource.y = 0;
       selectedSource.rotation = 0;
@@ -3243,10 +3331,9 @@ function setupCanvasTransformListeners() {
   // Stretch button
   btnTransStretch.addEventListener('click', () => {
     const selectedSource = addedSources.find(s => s.id === activeVideoSourceId);
-    const container = document.getElementById('video-canvas-container');
-    if (selectedSource && selectedSource.video && container) {
-      const nativeWidth = selectedSource.video.videoWidth;
-      const nativeHeight = selectedSource.video.videoHeight;
+    if (selectedSource && selectedSource.video) {
+      const nativeWidth = selectedSource.video.videoWidth || 1920;
+      const nativeHeight = selectedSource.video.videoHeight || 1080;
       
       let canvasW = 1920;
       let canvasH = 1080;
@@ -3257,11 +3344,9 @@ function setupCanvasTransformListeners() {
           canvasH = parseInt(parts[1]) || 1080;
         }
       }
-      const vpScale = container.clientWidth / canvasW;
 
-      // Stretch to fit the canvas bounds perfectly (non-uniformly!)
-      selectedSource.scaleX = container.clientWidth / (nativeWidth * vpScale);
-      selectedSource.scaleY = container.clientHeight / (nativeHeight * vpScale);
+      selectedSource.scaleX = canvasW / nativeWidth;
+      selectedSource.scaleY = canvasH / nativeHeight;
       selectedSource.x = 0;
       selectedSource.y = 0;
       selectedSource.rotation = 0;
@@ -3808,7 +3893,7 @@ function startResourceMonitoring() {
     if (resReplayCache) {
       if (replayActive && replayQueue.length > 0) {
         const headerSize = replayHeader ? replayHeader.byteLength : 0;
-        const bodySize = replayQueue.reduce((acc, curr) => acc + curr.byteLength, 0);
+        const bodySize = replayQueue.reduce((acc, curr) => acc + (curr.buffer ? curr.buffer.byteLength : 0), 0);
         const cacheMB = ((headerSize + bodySize) / (1024 * 1024)).toFixed(1);
         resReplayCache.innerText = `${cacheMB} MB`;
       } else {

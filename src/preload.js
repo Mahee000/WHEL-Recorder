@@ -38,7 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopRecordingStream: () => ipcRenderer.invoke('stop-recording-stream'),
   startReplayStream: (filename) => ipcRenderer.invoke('start-replay-stream', filename),
   writeReplayChunk: (arrayBuffer) => ipcRenderer.invoke('write-replay-chunk', arrayBuffer),
-  stopReplayStream: () => ipcRenderer.invoke('stop-replay-stream'),
+  stopReplayStream: (offsetSeconds) => ipcRenderer.invoke('stop-replay-stream', offsetSeconds),
   saveBookmarks: (filename, content) => ipcRenderer.invoke('save-bookmarks', filename, content),
   readBookmarks: (videoFilename) => ipcRenderer.invoke('read-bookmarks', videoFilename),
   getGalleryFiles: () => ipcRenderer.invoke('get-gallery-files'),

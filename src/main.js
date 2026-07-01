@@ -5,10 +5,14 @@ const child_process = require('child_process');
 const ffmpegStatic = require('ffmpeg-static');
 const ffmpegPath = ffmpegStatic.replace('app.asar', 'app.asar.unpacked');
 
-function finalizeVideoContainer(rawFilePath, finalFilePath) {
+function finalizeVideoContainer(rawFilePath, finalFilePath, offsetSeconds) {
   return new Promise((resolve, reject) => {
-    logDebug(`Finalizing video via FFmpeg: ${rawFilePath} -> ${finalFilePath}`);
-    const args = ['-i', rawFilePath, '-c', 'copy', '-y', finalFilePath];
+    logDebug(`Finalizing video via FFmpeg: ${rawFilePath} -> ${finalFilePath} (offset: ${offsetSeconds})`);
+    const args = [];
+    if (offsetSeconds !== undefined && offsetSeconds !== null && offsetSeconds > 0) {
+      args.push('-ss', String(offsetSeconds));
+    }
+    args.push('-i', rawFilePath, '-c', 'copy', '-y', finalFilePath);
     child_process.execFile(ffmpegPath, args, (error, stdout, stderr) => {
       if (error) {
         logDebug(`FFmpeg finalize failed: ${error.message}\n${stderr}`);
@@ -208,6 +212,9 @@ function loadConfig() {
   } catch (e) {
     logDebug(`Error loading configurations, using defaults: ${e.message}`);
     config = defaults;
+    try {
+      saveConfig(config);
+    } catch (saveErr) {}
   }
   return config;
 }
@@ -236,7 +243,7 @@ function applyProcessPriority() {
       'idle': os.constants.priority.PRIORITY_LOWEST
     };
     const priority = priorityMap[config.processPriority] || os.constants.priority.PRIORITY_NORMAL;
-    os.setPriority(priority);
+    os.setPriority(0, priority);
     logDebug(`Process priority configured as: ${config.processPriority}`);
   } catch (err) {
     logDebug(`Failed to set process priority: ${err.message}`);
@@ -294,11 +301,13 @@ function createTray() {
   if (tray) return;
 
   const iconPath = path.join(__dirname, 'assets', 'icon.png');
-  // Check if icon exists, fallback if not
-  const finalIconPath = fs.existsSync(iconPath) ? iconPath : path.join(__dirname, '..', 'package.json'); // Dummy fallback
+  if (!fs.existsSync(iconPath)) {
+    logDebug(`System tray icon not found at: ${iconPath}. Skipping tray creation.`);
+    return;
+  }
 
   try {
-    tray = new Tray(finalIconPath);
+    tray = new Tray(iconPath);
     const contextMenu = Menu.buildFromTemplate([
       {
         label: 'Open WHEL Recorder',
@@ -360,6 +369,17 @@ function createWindow() {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
+
+  mainWindow.webContents.on('did-start-navigation', () => {
+    logDebug('Navigation/reload detected, cleaning up active audio loopbacks...');
+    for (const pid of activeAudioPids) {
+      try {
+        stopAudioCapture(pid);
+        logDebug(`Stopped active audio loopback on PID ${pid} during reload.`);
+      } catch (e) {}
+    }
+    activeAudioPids.clear();
+  });
 
   mainWindow.on('close', (e) => {
     if (!isQuitting && config.minimizeToTray) {
@@ -481,8 +501,13 @@ ipcMain.handle('start-app-audio', async (event, pid) => {
     }
 
     if (activeAudioPids.has(pidInt)) {
-      logDebug(`Audio loopback already active for PID ${pidInt}`);
-      return true;
+      logDebug(`Audio loopback already active for PID ${pidInt}. Stopping it first to re-bind.`);
+      try {
+        stopAudioCapture(pidInt);
+      } catch (e) {
+        logDebug(`Error stopping active capture: ${e.message}`);
+      }
+      activeAudioPids.delete(pidInt);
     }
 
     const { MessageChannelMain } = require('electron');
@@ -673,6 +698,10 @@ ipcMain.handle('read-bookmarks', async (event, videoFilename) => {
 
 ipcMain.handle('start-recording-stream', async (event, filename) => {
   try {
+    if (recordingWriteStream && !recordingWriteStream.destroyed) {
+      logDebug('Recording stream already active. Ending previous stream.');
+      try { recordingWriteStream.end(); } catch (e) {}
+    }
     const finalPath = path.join(recordingDir, filename);
     const rawPath = path.join(recordingDir, 'raw_' + filename);
     recordingWriteStream = fs.createWriteStream(rawPath);
@@ -733,22 +762,31 @@ ipcMain.handle('write-recording-chunk', async (event, arrayBuffer) => {
 
 ipcMain.handle('stop-recording-stream', async () => {
   try {
+    let success = false;
     if (recordingWriteStream) {
       const rawPath = recordingWriteStream.rawPath;
       const finalPath = recordingWriteStream.finalPath;
       const filename = path.basename(finalPath);
-      await new Promise((resolve, reject) => {
+      success = await new Promise((resolve) => {
         recordingWriteStream.end(async () => {
-          const success = await finalizeVideoContainer(rawPath, finalPath);
-          if (success) fs.unlink(rawPath, () => {});
-          resolve();
+          const ok = await finalizeVideoContainer(rawPath, finalPath);
+          if (ok) {
+            fs.unlink(rawPath, () => {});
+            resolve(true);
+          } else {
+            resolve(false);
+          }
         });
       });
       recordingWriteStream = null;
-      logDebug(`Closed recording stream.`);
-      showToastNotification('Recording Saved', `Recording saved as ${filename}`);
+      logDebug(`Closed recording stream. Success: ${success}`);
+      if (success) {
+        showToastNotification('Recording Saved', `Recording saved as ${filename}`);
+      } else {
+        showToastNotification('Recording Error', `Failed to finalize video file. Raw file kept.`);
+      }
     }
-    return true;
+    return success;
   } catch (e) {
     logDebug(`Failed to close recording stream: ${e.message}`);
     return false;
@@ -757,6 +795,10 @@ ipcMain.handle('stop-recording-stream', async () => {
 
 ipcMain.handle('start-replay-stream', async (event, filename) => {
   try {
+    if (replayWriteStream && !replayWriteStream.destroyed) {
+      logDebug('Replay stream already active. Ending previous stream.');
+      try { replayWriteStream.end(); } catch (e) {}
+    }
     const finalPath = path.join(recordingDir, filename);
     const rawPath = path.join(recordingDir, 'raw_' + filename);
     replayWriteStream = fs.createWriteStream(rawPath);
@@ -786,27 +828,36 @@ ipcMain.handle('write-replay-chunk', async (event, arrayBuffer) => {
   }
 });
 
-ipcMain.handle('stop-replay-stream', async () => {
+ipcMain.handle('stop-replay-stream', async (event, offsetSeconds) => {
   try {
+    let success = false;
     if (replayWriteStream) {
       const rawPath = replayWriteStream.rawPath;
       const finalPath = replayWriteStream.finalPath;
       const filename = path.basename(finalPath);
-      await new Promise((resolve, reject) => {
+      success = await new Promise((resolve) => {
         replayWriteStream.end(async (err) => {
-          if (err) reject(err);
+          if (err) resolve(false);
           else {
-            const success = await finalizeVideoContainer(rawPath, finalPath);
-            if (success) fs.unlink(rawPath, () => {});
-            resolve();
+            const ok = await finalizeVideoContainer(rawPath, finalPath, offsetSeconds);
+            if (ok) {
+              fs.unlink(rawPath, () => {});
+              resolve(true);
+            } else {
+              resolve(false);
+            }
           }
         });
       });
       replayWriteStream = null;
-      logDebug(`Closed replay stream.`);
-      showToastNotification('Replay Saved', `Replay saved as ${filename}`);
+      logDebug(`Closed replay stream. Success: ${success}`);
+      if (success) {
+        showToastNotification('Replay Saved', `Replay saved as ${filename}`);
+      } else {
+        showToastNotification('Replay Error', `Failed to finalize replay clip.`);
+      }
     }
-    return true;
+    return success;
   } catch (e) {
     logDebug(`Failed to close replay stream: ${e.message}`);
     return false;

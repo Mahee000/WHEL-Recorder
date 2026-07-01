@@ -16,11 +16,12 @@ class NoiseGateProcessor extends AudioWorkletProcessor {
     const input = inputs[0];
     const output = outputs[0];
     
-    if (!input || input.length === 0) return true;
+    if (!input || input.length === 0 || !output || output.length === 0) return true;
 
     // Find the maximum amplitude in this block (usually 128 samples)
     let maxAmp = 0;
     for (let channel = 0; channel < input.length; channel++) {
+      if (!input[channel]) continue;
       for (let i = 0; i < input[channel].length; i++) {
         const absVal = Math.abs(input[channel][i]);
         if (absVal > maxAmp) maxAmp = absVal;
@@ -42,8 +43,11 @@ class NoiseGateProcessor extends AudioWorkletProcessor {
         this.envelope += (0.0 - this.envelope) * this.release;
       }
 
-      for (let channel = 0; channel < input.length; channel++) {
-        output[channel][i] = input[channel][i] * this.envelope;
+      const activeChannels = Math.min(input.length, output.length);
+      for (let channel = 0; channel < activeChannels; channel++) {
+        if (output[channel] && input[channel]) {
+          output[channel][i] = input[channel][i] * this.envelope;
+        }
       }
     }
 

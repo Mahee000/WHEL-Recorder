@@ -1,8 +1,10 @@
 class PCMProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    // Flat queue of Float32 audio samples (L, R, L, R, ...)
-    this.inputBuffer = new Float32Array(0);
+    // Pre-allocated Float32 audio ring buffer (5 seconds of stereo audio)
+    this.bufferSize = 48000 * 2 * 5;
+    this.inputBuffer = new Float32Array(this.bufferSize);
+    this.writeIndex = 0;
     this.readIndex = 0;
     
     // Measuring input sample rate
@@ -15,33 +17,23 @@ class PCMProcessor extends AudioWorkletProcessor {
       if (!rawData) return;
       const int16Data = new Int16Array(rawData);
       
-      // Convert Int16 to Float32
-      const floatData = new Float32Array(int16Data.length);
+      // Convert Int16 to Float32 and write to circular buffer
       for (let i = 0; i < int16Data.length; i++) {
-        floatData[i] = int16Data[i] / 32768.0;
+        const floatSample = int16Data[i] / 32768.0;
+        const targetIndex = (this.writeIndex + i) % this.bufferSize;
+        this.inputBuffer[targetIndex] = floatSample;
       }
       
-      // Append to inputBuffer
-      const newBuffer = new Float32Array(this.inputBuffer.length + floatData.length);
-      newBuffer.set(this.inputBuffer);
-      newBuffer.set(floatData, this.inputBuffer.length);
-      this.inputBuffer = newBuffer;
+      this.writeIndex = (this.writeIndex + int16Data.length) % this.bufferSize;
       
       // Accumulate input samples count (stereo frames = samples / 2)
-      this.totalInputSamples += floatData.length / 2;
-      
-      // Prevent memory leaks: cap inputBuffer size (5 seconds of stereo audio)
-      const maxBufferSize = 48000 * 2 * 5;
-      if (this.inputBuffer.length > maxBufferSize) {
-        const discardSize = this.inputBuffer.length - maxBufferSize;
-        this.inputBuffer = this.inputBuffer.slice(discardSize);
-        this.readIndex = Math.max(0, this.readIndex - discardSize);
-      }
+      this.totalInputSamples += int16Data.length / 2;
     };
   }
 
   findNearestStandardRate(rate) {
-    const standardRates = [8000, 11025, 16000, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000];
+    // WASAPI capture rates are standard hardware rates. Restrict to valid hardware rates.
+    const standardRates = [44100, 48000, 88200, 96000, 176400, 192000];
     let nearest = standardRates[0];
     let minDiff = Math.abs(rate - nearest);
     for (let i = 1; i < standardRates.length; i++) {
@@ -71,12 +63,11 @@ class PCMProcessor extends AudioWorkletProcessor {
       const ratio = this.totalInputSamples / this.totalOutputSamples;
       const rawInputRate = ratio * outRate;
       
-      let roundedRate = outRate;
-      if (rawInputRate > 4000) {
-        roundedRate = this.findNearestStandardRate(rawInputRate);
+      // Only calibrate if we received a steady stream of data (rate > 40000)
+      // Otherwise, keep the previous rate (prevents lags from throwing off the sample rate)
+      if (rawInputRate > 40000) {
+        this.measuredInputRate = this.findNearestStandardRate(rawInputRate);
       }
-      
-      this.measuredInputRate = roundedRate;
       
       // Reset counters for next window
       this.totalInputSamples = 0;
@@ -84,16 +75,31 @@ class PCMProcessor extends AudioWorkletProcessor {
     }
 
     const inRate = this.measuredInputRate || outRate;
-    const playbackRatio = inRate / outRate;
 
+    // Recalculate available samples to prevent any floating point drift
+    let availableSamples = this.writeIndex - this.readIndex;
+    if (availableSamples < 0) availableSamples += this.bufferSize;
+
+    // Dynamic latency adjustment (drift correction)
+    // Target buffer size: 80ms of stereo audio to keep latency extremely low
+    const targetSamples = outRate * 2 * 0.08;
+    let driftAdjustment = 1.0;
+    if (availableSamples > targetSamples * 1.5) {
+      // Speed up slightly to catch up latency
+      driftAdjustment = 1.03;
+    } else if (availableSamples < targetSamples * 0.5) {
+      // Slow down slightly to prevent buffer underflow
+      driftAdjustment = 0.97;
+    }
+
+    const playbackRatio = (inRate / outRate) * driftAdjustment;
     let writeCount = 0;
-    const inputFrames = this.inputBuffer.length / 2;
 
     while (writeCount < sampleCount) {
-      const currentFrameIndex = this.readIndex / 2;
+      const availableFrames = Math.floor(availableSamples / 2);
       
       // If we don't have enough input samples to interpolate, output silence
-      if (currentFrameIndex + 1 >= inputFrames) {
+      if (availableFrames < 2) {
         for (let c = 0; c < channelCount; c++) {
           output[c][writeCount] = 0;
         }
@@ -102,18 +108,22 @@ class PCMProcessor extends AudioWorkletProcessor {
       }
 
       // Linear interpolation indices
+      const currentFrameIndex = this.readIndex / 2;
       const index0 = Math.floor(currentFrameIndex);
-      const index1 = index0 + 1;
+      const index1 = (index0 + 1) % (this.bufferSize / 2);
       const t = currentFrameIndex - index0;
 
+      const bufferIdx0 = index0 * 2;
+      const bufferIdx1 = index1 * 2;
+
       // Left Channel
-      const l0 = this.inputBuffer[index0 * 2];
-      const l1 = this.inputBuffer[index1 * 2];
+      const l0 = this.inputBuffer[bufferIdx0];
+      const l1 = this.inputBuffer[bufferIdx1];
       const leftVal = l0 + t * (l1 - l0);
 
       // Right Channel
-      const r0 = this.inputBuffer[index0 * 2 + 1];
-      const r1 = this.inputBuffer[index1 * 2 + 1];
+      const r0 = this.inputBuffer[bufferIdx0 + 1];
+      const r1 = this.inputBuffer[bufferIdx1 + 1];
       const rightVal = r0 + t * (r1 - r0);
 
       if (channelCount === 2) {
@@ -128,16 +138,12 @@ class PCMProcessor extends AudioWorkletProcessor {
       }
 
       // Advance readIndex by 2 (stereo) scaled by ratio
-      this.readIndex += 2 * playbackRatio;
+      const advance = 2 * playbackRatio;
+      this.readIndex = (this.readIndex + advance) % this.bufferSize;
+      
+      // Update availableSamples
+      availableSamples = Math.max(0, availableSamples - advance);
       writeCount++;
-    }
-
-    // Clean up inputBuffer: discard fully read samples
-    const readFrameIndex = Math.floor(this.readIndex / 2);
-    if (readFrameIndex > 0) {
-      const discardSamples = readFrameIndex * 2;
-      this.inputBuffer = this.inputBuffer.slice(discardSamples);
-      this.readIndex -= discardSamples;
     }
 
     return true;
