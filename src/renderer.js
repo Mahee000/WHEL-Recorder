@@ -347,8 +347,8 @@ async function initApp() {
   
   // 3. Initialize audio context (Must be resumed later)
   try {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    debugLog(`AudioContext initialized in state: ${audioCtx.state}`);
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: parseInt(config.sampleRate) || 48000 });
+    debugLog(`AudioContext initialized in state: ${audioCtx.state} with sample rate: ${audioCtx.sampleRate}Hz`);
   } catch (err) {
     debugLog(`Failed to create AudioContext: ${err.message}`);
   }
@@ -1727,7 +1727,7 @@ function stopReplayBuffer() {
 function playReplayCaptureSound() {
   if (!config.replaySound) return;
   try {
-    const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = audioCtx || new (window.AudioContext || window.webkitAudioContext)({ sampleRate: parseInt(config.sampleRate) || 48000 });
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     
