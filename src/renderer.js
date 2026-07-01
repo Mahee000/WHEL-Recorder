@@ -1060,11 +1060,25 @@ async function setupAppAudioGraph(pid, name) {
       }
     });
 
+    let audioBuffer = new Uint8Array(0);
     appAudioObj.unsubListener = window.electronAPI.onAppAudioData(pid.toString(), (chunk) => {
       if (pcmNode && chunk) {
-        // Slice to get the exact data range and avoid shared buffer pool pollution
-        const exactBuffer = chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength);
-        pcmNode.port.postMessage(exactBuffer);
+        // Concatenate new chunk with existing buffer
+        const newBuf = new Uint8Array(audioBuffer.length + chunk.length);
+        newBuf.set(audioBuffer);
+        newBuf.set(chunk, audioBuffer.length);
+        
+        // Find how many complete stereo frames we have (4 bytes per frame)
+        const frameSize = 4;
+        const completeBytes = Math.floor(newBuf.length / frameSize) * frameSize;
+        
+        if (completeBytes > 0) {
+          const sendChunk = newBuf.slice(0, completeBytes);
+          pcmNode.port.postMessage(sendChunk.buffer);
+          audioBuffer = newBuf.slice(completeBytes);
+        } else {
+          audioBuffer = newBuf;
+        }
       }
     });
 

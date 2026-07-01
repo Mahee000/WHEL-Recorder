@@ -41,13 +41,13 @@ class PCMProcessor extends AudioWorkletProcessor {
 
       // Fill output buffer sample-by-sample
       while (this.readOffset < chunkLength && writeCount < sampleCount) {
-        if (channelCount === 2 && chunkLength % 2 === 0) {
+        if (channelCount === 2 && this.readOffset + 1 < chunkLength) {
           // Stereo interleaved PCM: [L, R, L, R, ...]
           output[0][writeCount] = currentChunk[this.readOffset] / 32768.0;
           output[1][writeCount] = currentChunk[this.readOffset + 1] / 32768.0;
           this.readOffset += 2;
         } else {
-          // Mono PCM or fallback
+          // Mono PCM or single leftover sample fallback
           const val = currentChunk[this.readOffset] / 32768.0;
           for (let c = 0; c < channelCount; c++) {
             output[c][writeCount] = val;
