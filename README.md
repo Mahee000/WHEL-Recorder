@@ -12,6 +12,7 @@
 
 - 🎥 **High-Performance Screen Capture:** Record your entire desktop or specific windows with extremely low overhead.
 - ⏪ **Replay Buffer (Always Recording):** Never miss a moment. Hit a global hotkey to instantly save the last X seconds of gameplay.
+- 🎙️ **Studio-Grade Microphone Processing:** Raw Float32 hardware capture with UI-configurable Noise Suppression, Echo Cancellation, Auto Gain Control, and a custom Noise Gate to keep your mic completely silent when not talking!
 - 🎛️ **Process-Specific Audio Loopback:** Select a specific game or application and record *only* its audio. Perfect for listening to Spotify or talking on Discord without ruining your clip's audio!
 - ⌨️ **Global Hotkeys:** Fully customizable hotkeys for Recording, Replay Buffer, Bookmarks, and Muting.
 - 🎞️ **Beautiful Built-in Gallery:** A premium, dark-mode gallery to view your saved recordings.
