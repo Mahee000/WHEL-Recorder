@@ -222,11 +222,18 @@ function loadConfig() {
 function applyAutoLaunch() {
   try {
     if (process.platform === 'win32') {
+      const isPackaged = app.isPackaged;
+      const exePath = app.getPath('exe');
+      const args = [];
+      if (!isPackaged) {
+        args.push(path.resolve(app.getAppPath()));
+      }
       app.setLoginItemSettings({
         openAtLogin: !!config.startWithWindows,
-        path: app.getPath('exe')
+        path: exePath,
+        args: args
       });
-      logDebug(`Auto-launch status set to: ${config.startWithWindows}`);
+      logDebug(`Auto-launch status set to: ${config.startWithWindows} (Packaged: ${isPackaged})`);
     }
   } catch (err) {
     logDebug(`Failed to apply auto-launch: ${err.message}`);

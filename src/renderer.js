@@ -40,6 +40,7 @@ let replayRecorder = null;
 let replayHeader = null;
 let replayQueue = [];
 let replayChunkIndex = 0;
+let discardedCount = 0;
 let isSavingReplay = false;
 let replayStartTime = 0;
 let activeWritePromises = [];
@@ -519,7 +520,7 @@ function getDefaults() {
     // General
     minimizeToTray: true,
     startMinimized: false,
-    autoLaunch: false,
+    startWithWindows: false,
     processPriority: 'above-normal',
     notifyRecord: true,
     notifyReplay: true
@@ -613,7 +614,7 @@ function syncSettingsUI() {
   if (selectAppTheme) selectAppTheme.value = config.appTheme || 'classic-obsidian';
   checkboxMinimizeTray.checked = config.minimizeToTray;
   if (checkboxStartMinimized) checkboxStartMinimized.checked = config.startMinimized;
-  if (checkboxStartWithWindows) checkboxStartWithWindows.checked = config.autoLaunch;
+  if (checkboxStartWithWindows) checkboxStartWithWindows.checked = config.startWithWindows;
   if (selectProcessPriority) selectProcessPriority.value = config.processPriority;
   if (checkboxNotifyRecord) checkboxNotifyRecord.checked = config.notifyRecord;
   if (checkboxNotifyReplay) checkboxNotifyReplay.checked = config.notifyReplay;
@@ -1680,6 +1681,7 @@ async function startReplayBuffer() {
   replayHeader = null;
   replayQueue = [];
   replayChunkIndex = 0;
+  discardedCount = 0;
 
   try {
     replayRecorder = new MediaRecorder(finalStream, options);
@@ -1692,11 +1694,11 @@ async function startReplayBuffer() {
         } else {
           replayQueue.push({ buffer: arrayBuffer, timestamp: Date.now() });
           
-          // Time Length Duration Limit enforcement (seconds)
-          const limitMs = parseInt(config.replayLength) * 1000;
-          const now = Date.now();
-          while (replayQueue.length > 0 && now - replayQueue[0].timestamp > limitMs) {
+          // Time Length Duration Limit enforcement (based on chunk count since each chunk is 1s)
+          const limitChunks = parseInt(config.replayLength);
+          while (replayQueue.length > limitChunks) {
             replayQueue.shift();
+            discardedCount++;
           }
 
           // OBS-style RAM Memory Limit enforcement
@@ -1705,6 +1707,7 @@ async function startReplayBuffer() {
           
           while (currentRamBytes > maxRamBytes && replayQueue.length > 0) {
             const removed = replayQueue.shift();
+            discardedCount++;
             currentRamBytes -= removed.buffer.byteLength;
           }
         }
@@ -1808,9 +1811,7 @@ async function saveReplayBuffer() {
         await window.electronAPI.writeReplayChunk(chunk);
       }
     }
-    const firstChunkTimestamp = replayQueue[0].timestamp;
-    const offsetMs = firstChunkTimestamp - replayStartTime;
-    const offsetSeconds = Math.max(0, (offsetMs - 500) / 1000);
+    const offsetSeconds = discardedCount;
     
     await window.electronAPI.stopReplayStream(offsetSeconds);
     
@@ -2010,7 +2011,7 @@ function setupEventListeners() {
   // Settings sync - General
   if (checkboxMinimizeTray) checkboxMinimizeTray.addEventListener('change', e => { config.minimizeToTray = e.target.checked; saveLocalConfig(); });
   if (checkboxStartMinimized) checkboxStartMinimized.addEventListener('change', e => { config.startMinimized = e.target.checked; saveLocalConfig(); });
-  if (checkboxStartWithWindows) checkboxStartWithWindows.addEventListener('change', e => { config.autoLaunch = e.target.checked; saveLocalConfig(); });
+  if (checkboxStartWithWindows) checkboxStartWithWindows.addEventListener('change', e => { config.startWithWindows = e.target.checked; saveLocalConfig(); });
   if (selectProcessPriority) selectProcessPriority.addEventListener('change', e => { config.processPriority = e.target.value; saveLocalConfig(); });
   if (checkboxNotifyRecord) checkboxNotifyRecord.addEventListener('change', e => { config.notifyRecord = e.target.checked; saveLocalConfig(); });
   if (checkboxNotifyReplay) checkboxNotifyReplay.addEventListener('change', e => { config.notifyReplay = e.target.checked; saveLocalConfig(); });
